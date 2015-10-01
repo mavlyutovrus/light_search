@@ -6,14 +6,14 @@ import chardet
 #pip install unidecode
 import unidecode
 #pip install snowballstemmer
-import Stemmer
+import snowballstemmer
 
 
 CASE_UPPER = 2
 CASE_TITLE = 1
 CASE_LOWER = 0
 
-RussianStemmer = Stemmer.Stemmer("russian")
+RussianStemmer = snowballstemmer.stemmer("russian");
 
 """
 1) http links
