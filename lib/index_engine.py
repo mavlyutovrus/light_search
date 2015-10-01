@@ -51,7 +51,6 @@ class TSearchEngine(object):
     def save_updates(self):
         if self.readonly:
             return
-        self.flush_word_index_buffer()
         self.word_index.sync()
         self.word_freqs.sync()
         self.segment_index.sync()
@@ -60,11 +59,11 @@ class TSearchEngine(object):
         out.close()
     
     def __del__(self):
-        print "Index is closing."
         self.save_updates()
         self.word_index.close()
         self.word_freqs.close()
         self.segment_index.close()
+        print "Index is closed."
     
     def add_segment(self, start, length, 
                           field_value, object_id, 
@@ -277,8 +276,10 @@ class TSearchEngine(object):
         return by_segment 
     
     """ return list of TSearchEngineResult sorted by weights (high weight first) """
-    def search(self, query):        
-        query_matches = self.parsers.parse_buffer(query.encode("utf8"))
+    def search(self, query):       
+        if type(query) == unicode:
+            query = query.encode("utf8") 
+        query_matches = self.parsers.parse_buffer(query)
         query_tokens = [match.token for match in query_matches]
         query_tokens = query_tokens[:TSearchEngine.MAX_QUERY_SIZE]
         local_token2idf = {token:self.token2idf(token)  for token in query_tokens}
@@ -291,11 +292,9 @@ class TSearchEngine(object):
             span_word_matches = self.shortest_span(positions)
             match_weight = self.calc_full_match_weight(span_word_matches, query_tokens, local_token2idf)
             span_start, span_end = span_word_matches[0][0][0], span_word_matches[-1][0][0]
-            words2select = []
-            for token, positions in positions.items():
-                words2select += [(position, token) for position in positions \
-                                    if position >= span_start and position <= span_end]        
-            words2select.sort()
+            words2select = [(token, position_word_case[0]) for token, token_positions in positions.items() \
+                                    for position_word_case in token_positions \
+                                        if position_word_case[0] >= span_start and position_word_case[0] <= span_end]
             results_with_weights += [(match_weight, TSearchEngineResult(segment_id, match_weight, words2select))]
         results_with_weights.sort(reverse=True)
         results = [result for _, result in results_with_weights]
