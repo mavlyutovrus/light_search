@@ -28,19 +28,19 @@ class TTextParser(TParser):
     def file_of_my_type(self, file_path):
         return file_path.endswith(".txt")
     
-    def parse_buffer(self, undecoded_text_buffer):
+    def parse_buffer(self, undecoded_text_buffer, encoding=""):
         from ling_utils import span_tokenize
-        tokens = span_tokenize(undecoded_text_buffer)
+        tokens = span_tokenize(undecoded_text_buffer, encoding=encoding)
         from ling_utils import unify_tokens   
         """replace tokens with latin keywords + all to lowercase"""
         unify_tokens(tokens)
         return tokens 
 
-    def parse_file(self, file_path):
+    def parse_file(self, file_path, encoding=""):
         if not self.file_of_my_type(file_path):
             raise Exception("Parser", '%s Not a Text file: expect it to end with .txt' % (file_path))
         undecoded_content = open(file_path, "rb").read()
-        return self.parse_buffer(undecoded_content)
+        return self.parse_buffer(undecoded_content, encoding)
 
 class TParsersBundle(object):
     def __init__(self):

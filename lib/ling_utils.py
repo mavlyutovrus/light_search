@@ -17,9 +17,8 @@ RussianStemmer = snowballstemmer.stemmer("russian");
 
 """
 1) http links
-2) russian words
-3) all other words
-4) line breaks
+2) words, numbers
+3) meaningful signs 
 """
 TOKENIZATION_PATTERNS =  [u"http[^,\"\']+", \
                           u"[а-яА-ЯЁё0-9a-zA-Z]+", \
@@ -56,6 +55,9 @@ def span_tokenize(encoded_text_buffer, encoding="", fast=False):
     if not encoding:
         try:
             encoding = chardet.detect(encoded_text_buffer)['encoding']
+            """ in russia we call it kostyl' """
+            if encoding == "MacCyrillic":
+                encoding = "windows-1251"
         except:
             sys.stderr.write(str(sys.exc_info()) + "\n\n")
             encoding = ""

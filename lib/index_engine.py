@@ -46,7 +46,9 @@ class TSearchEngine(object):
         if os.path.exists(self.filter_location):
             self.prob_filter = ScalableBloomFilter.fromfile(open(self.filter_location, "rb"))  
         else:
-            self.prob_filter = ScalableBloomFilter(error_rate=0.01, mode=ScalableBloomFilter.LARGE_SET_GROWTH)      
+            self.prob_filter = ScalableBloomFilter(error_rate=0.1, 
+                                                   mode=ScalableBloomFilter.LARGE_SET_GROWTH,
+                                                   initial_capacity=1000000000)     
     
     def save_updates(self):
         if self.readonly:
@@ -275,13 +277,27 @@ class TSearchEngine(object):
                     by_segment[segment_id].setdefault(token, []).append((position, match_case))
         return by_segment 
     
+    
+    def trim_query_tokens(self, query_tokens):
+        if len(query_tokens) <= TSearchEngine.MAX_QUERY_SIZE:
+            return query_tokens
+        with_freqs = [(token in self.word_freqs and self.word_freqs[token] or 0, token)\
+                                                               for token in query_tokens]
+        only_freqs = [freq for freq, _ in with_freqs]
+        only_freqs.sort()
+        max_freq = only_freqs[TSearchEngine.MAX_QUERY_SIZE - 1]
+        trimmed_query_tokens = [token for freq, token in with_freqs if freq <= max_freq]
+        #for the case of equal freqs in the tail
+        trimmed_query_tokens = trimmed_query_tokens[:TSearchEngine.MAX_QUERY_SIZE]
+        return trimmed_query_tokens
+    
     """ return list of TSearchEngineResult sorted by weights (high weight first) """
     def search(self, query):       
         if type(query) == unicode:
             query = query.encode("utf8") 
         query_matches = self.parsers.parse_buffer(query)
         query_tokens = [match.token for match in query_matches]
-        query_tokens = query_tokens[:TSearchEngine.MAX_QUERY_SIZE]
+        query_tokens = self.trim_query_tokens(query_tokens)
         local_token2idf = {token:self.token2idf(token)  for token in query_tokens}
         
         by_segment = self.get_initial_matches(query_tokens, local_token2idf)
