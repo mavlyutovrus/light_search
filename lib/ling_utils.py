@@ -20,7 +20,7 @@ RussianStemmer = snowballstemmer.stemmer("russian");
 2) words, numbers
 3) meaningful signs 
 """
-TOKENIZATION_PATTERNS =  [u"http[^,\"\']+", \
+TOKENIZATION_PATTERNS =  [u"http[^,\"\'\s]+", \
                           u"[а-яА-ЯЁё0-9a-zA-Z]+", \
                           u"[\+\=]"]
 TOKENIZATION_PATTERN  = re.compile(u"|".join(TOKENIZATION_PATTERNS))

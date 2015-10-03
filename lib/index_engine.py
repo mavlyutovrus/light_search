@@ -25,7 +25,7 @@ class TSearchEngine(object):
         all occurrences after that amount will be served by  BloomFilter"""
     MAX_WORD_FREQ = 100000
     MAX_QUERY_SIZE = 5
-    SEGMENT_SIZE = 256
+    SEGMENT_SIZE = 128
     CRUDE_FILTER_TRIM_PROPORTION = 0.1
     CRUDE_FILTER_MAX_SELECT = 1000
     STAT_FILTER_CONTEXT = 2
@@ -67,9 +67,10 @@ class TSearchEngine(object):
         self.segment_index.close()
         print "Index is closed."
     
-    def add_segment(self, start, length, 
-                          field_value, object_id, 
-                          field_id, segment_tokens):
+    def add_segment(self, start, 
+                          length,
+                          object_id, 
+                          field_id):
         segment_id = self.segments_count
         self.segments_count += 1
         self.segment_index[str(segment_id)] = (object_id, field_id, start, length)
@@ -106,54 +107,44 @@ class TSearchEngine(object):
     def to_word_index(self, token, coordinate):
         self.word_index.setdefault(token, []).append(coordinate)           
         
-    def to_index(self, tokens_matches, field_value, indexing_object, field_id):
+    def to_index(self, tokens_matches, indexing_object, field_id):
         """ !!! matches sorted by start value !!! """
-        segment_start = 0
-        segment_tokens = []
-        #dummy match
-        tokens_matches += [TTokenMatch(start=len(field_value), 
-                                       length=TSearchEngine.SEGMENT_SIZE, 
-                                       case=CASE_LOWER, 
-                                       token="")]
-        for match_index in xrange(len(tokens_matches)):
-            is_dummy = match_index == len(tokens_matches) - 1
-            match = tokens_matches[match_index]
-            token_start = match.start
-            if token_start - segment_start >= TSearchEngine.SEGMENT_SIZE or is_dummy:
-                segment_length = token_start - segment_start
-                segment_id = self.add_segment(segment_start, segment_length,
-                                 field_value, indexing_object.object_id, 
-                                 field_id, segment_tokens)
-                for segment_match_index in xrange(len(segment_tokens)):
-                    segment_match = segment_tokens[segment_match_index]
-                    segment_token = segment_match.token
-                    offset_in_segment = segment_match.start - segment_start
-                    self.word_freqs.setdefault(segment_token, 0)
-                    self.word_freqs[segment_token] += 1
-                    word_case_weight = segment_match.case == CASE_UPPER and 2 or segment_match.case == CASE_TITLE and 1 or 0
-                    if self.word_freqs[segment_token] > TSearchEngine.MAX_WORD_FREQ:
-                        code = self.match2code(segment_id, segment_match_index)
-                        self.to_probalistic_filter(segment_token, code)
-                    else:
-                        code = self.match2code(segment_id, segment_match_index, word_case_weight)
-                        self.to_word_index(segment_token, code)
-                segment_tokens = []
-                segment_start = token_start
-            segment_tokens.append(match)
+        for first_match_index in xrange(0, len(tokens_matches), TSearchEngine.SEGMENT_SIZE):
+            last_match_index = min(first_match_index + TSearchEngine.SEGMENT_SIZE - 1, 
+                                   len(tokens_matches) - 1)
+            first_match = tokens_matches[first_match_index] 
+            last_match = tokens_matches[last_match_index]
+            segment_start = first_match.start
+            segment_length = last_match.start + last_match.length - segment_start
+            segment_id = self.add_segment(segment_start, 
+                                          segment_length,
+                                          indexing_object.object_id, 
+                                          field_id)       
+            for match_index in xrange(first_match_index, last_match_index + 1):
+                segment_match = tokens_matches[match_index]
+                segment_match_index = match_index - first_match_index
+                segment_token = segment_match.token
+                offset_in_segment = segment_match.start - segment_start
+                self.word_freqs.setdefault(segment_token, 0)
+                self.word_freqs[segment_token] += 1
+                word_case_weight = segment_match.case == CASE_UPPER and 2 or segment_match.case == CASE_TITLE and 1 or 0
+                if self.word_freqs[segment_token] > TSearchEngine.MAX_WORD_FREQ:
+                    code = self.match2code(segment_id, segment_match_index)
+                    self.to_probalistic_filter(segment_token, code)
+                else:
+                    code = self.match2code(segment_id, segment_match_index, word_case_weight)
+                    self.to_word_index(segment_token, code)
 
     def index_object(self, indexing_object):
         import datetime
         for field in indexing_object.object_fields:
             tokens_matches = []
-            field_value = ""
             if field.field_value:
                 tokens_matches = self.parsers.parse_buffer(field.field_value)
-                field_value = field.field_value
             elif field.field_file_path:
                 tokens_matches = self.parsers.parse_file(field.field_file_path)
-                field_value = open(field.field_file_path).read()
             if tokens_matches:
-                self.to_index(tokens_matches, field_value, indexing_object, field.field_id)
+                self.to_index(tokens_matches, indexing_object, field.field_id)
     
     def shortest_span(self, positions):
         counts_inside = {}
@@ -292,11 +283,12 @@ class TSearchEngine(object):
         return trimmed_query_tokens
     
     """ return list of TSearchEngineResult sorted by weights (high weight first) """
-    def search(self, query):       
+    def search(self, query):
         if type(query) == unicode:
             query = query.encode("utf8") 
         query_matches = self.parsers.parse_buffer(query)
-        query_tokens = [match.token for match in query_matches]
+        query_tokens = [match.token for match in query_matches]        
+        
         query_tokens = self.trim_query_tokens(query_tokens)
         local_token2idf = {token:self.token2idf(token)  for token in query_tokens}
         
