@@ -34,4 +34,7 @@ class TSearchServer(object):
 server = TSearchServer(port=1234, 
                        books_folder="/home/arslan/src/ngpedia/books1000", 
                        index_folder="indices/")
-server.search(u"нефтепереработкой")
+
+
+
+server.search(u"для олефинов корова человек зум рис рис")

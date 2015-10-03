@@ -10,10 +10,10 @@ class TParser(object):
     def buffer_of_my_type(self, buffer):
         return True
     
-    def parse_file(self, file_path):
+    def parse_file(self, file_path, encoding=""):
         pass
     
-    def parse_buffer(self, buffer):
+    def parse_buffer(self, buffer, encoding=""):
         pass
     
     def split_on_blocks(self, tokens):
@@ -46,10 +46,10 @@ class TParsersBundle(object):
     def __init__(self):
         self.parsers = [TTextParser()]
 
-    def parse_file(self, file_name):
+    def parse_file(self, file_name, encoding=""):
         for parser in self.parsers:
             if parser.file_of_my_type(file_name):
-                return parser.parse_file(file_name)
+                return parser.parse_file(file_name, encoding)
         raise Exception("Parsing:", "No parser for file %s" % (file_name))
     
     def parse_buffer(self, buffer):

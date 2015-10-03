@@ -5,7 +5,7 @@ from datetime import datetime
 import sys
 import os
 
-books_dir = "/home/arslan/src/ngpedia/books1000"
+books_dir = sys.argv[1]
 crawler = TCrawler(verbosity=1)
 books_counter = TCustomCounter("BooksCounter", sys.stdout, verbosity=1, interval=1)
 all_fields = []
