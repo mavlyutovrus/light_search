@@ -16,6 +16,7 @@ class TSearchEngineResult(object):
         self.words2select = words2select
 
 class TSearchEngine(object):
+    MAX_WORD_FREQ = 100000
     SEGMENT_SIZE = 128
     MAX_QUERY_SIZE = 5
     CRUDE_FILTER_TRIM_PROPORTION = 0.1

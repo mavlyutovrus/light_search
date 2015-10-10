@@ -26,7 +26,6 @@ def parse_books_(books, matches_file_fname, word_freqs_file_fname, log_file_fnam
             matches_file.write(token + "\t" + " ".join(str(code) for code in codes) + "\n")
         words_index[0] = {}
         words_in_buffer[0] = 0
-        print "buffer flushed"
     
     def to_word_index(token, code):
         words_index[0].setdefault(token, []).append(code)
@@ -104,13 +103,11 @@ def parse_books(books, intermid_results_dir, processes_number=10):
         log_fname = os.path.join(intermid_results_dir, str(pid) + "_log.txt")
         files_by_process.append( (matches_fname, word_freqs_fname, log_fname) )
         pid += 1
-    
     tasks = []
     for pid in xrange(len(books_by_process)):
         books_set = books_by_process[pid]
         matches_fname, word_freqs_fname, log_fname = files_by_process[pid]
         tasks += [(books_set, matches_fname, word_freqs_fname, log_fname)]
-    
     from multiprocessing import Pool
     pool = Pool(processes_number)
     pool.map(parse_worker, tasks)

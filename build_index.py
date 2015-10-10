@@ -42,7 +42,7 @@ print "Reshuffling:", datetime.now() - start
 
 start = datetime.now()
 
-reduce(reducers_chunks, indices_dir, intermid_results_dir, processes_number=10)
+reduce(reducers_fnames, indices_dir, intermid_results_dir, processes_number=10)
 
 print "Reduce:", datetime.now() - start
 
