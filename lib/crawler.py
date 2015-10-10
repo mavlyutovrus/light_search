@@ -1,8 +1,17 @@
 #-*- coding:utf8 -*-
 from utils import crawl_folder
 from utils import TCustomCounter
-from index_engine import TIndexingObjectField
-from index_engine import TIndexingObjectData
+            
+class TIndexingObjectField(object):
+    def __init__(self, field_id, field_value, field_file_path):
+        self.field_id = field_id
+        self.field_file_path = field_file_path
+        self.field_value = field_value
+
+class TIndexingObjectData(object):
+    def __init__(self, object_id, object_fields):
+        self.object_id = object_id
+        self.object_fields = object_fields    
 
 class TCrawler(object):
     def __init__(self, verbosity = 0):
@@ -20,7 +29,7 @@ class TCrawler(object):
     def crawl_folder(self, folder):
         object_folders = crawl_folder(folder)
         import sys
-        processed_counter = TCustomCounter("Proc. objects", sys.stderr, self.verbosity, 100)
+        processed_counter = TCustomCounter("Crawler, found objects", sys.stderr, self.verbosity, 100)
         for object_folder, object_id in object_folders:
             fields2update = self.crawl_object_fields(object_folder, object_id)
             object2update = TIndexingObjectData(object_id=object_id,

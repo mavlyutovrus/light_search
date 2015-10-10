@@ -4,11 +4,11 @@ class TSearchServer(object):
     def __init__(self, port, books_folder, index_folder):
         self.books_folder = books_folder
         self.index_folder = index_folder
-        from lib.index_engine import TSearchEngine
-        self.search_index = TSearchEngine(index_location=self.index_folder, readonly=True)
+        from lib.search_engine import TSearchEngine
+        self.search_engine = TSearchEngine(index_location=self.index_folder)
     
     def get_segment_snippet(self, segment_id):
-        obj_id, field_id, start, length = self.search_index.segment_index[str(segment_id)]
+        obj_id, field_id, start, length = self.search_engine.segment_index.get_segment(segment_id)
         import os
         location = os.path.join(self.books_folder, obj_id, field_id)
         f = open(location, "rb")
@@ -17,10 +17,12 @@ class TSearchServer(object):
         return snippet
     
     def search(self, query):
-        results = self.search_index.search(query)
+        results = self.search_engine.search(query)
+        to_return = results
+        #return to_return
         for result in results[:10]:
             snippet = self.get_segment_snippet(result.segment_id)
-            matches = self.search_index.parsers.parse_buffer(snippet)
+            matches = self.search_engine.parsers.parse_buffer(snippet, "windows-1251")
             to_select = []
             for token, position in result.words2select:
                 to_select += [(matches[position].start, matches[position].start + matches[position].length)]
@@ -30,11 +32,29 @@ class TSearchServer(object):
                 snippet = snippet[:sel_start] + "[[[" + snippet[sel_start:sel_end] + "]]]" + snippet[sel_end:]
             snippet = snippet.decode("windows-1251").replace(chr(13), " ").replace(chr(10), " ")
             print "->>>", snippet
+        return to_return
 
 server = TSearchServer(port=1234, 
                        books_folder="/home/arslan/src/ngpedia/books1000", 
-                       index_folder="indices/")
+                       index_folder="indices2/")
 
+print "start"
 
+#server.search(u"получение этиленгddasddsfликоля")
 
-server.search(u"для олефинов корова человек зум рис рис")
+for line in open("selected_queries.txt"):
+    import datetime
+    query, fields = line[:-1].split("\t")
+    fields = fields.split()
+    query_tokens = query.split("_")
+    if query_tokens != ['18', '15', '22']:
+        continue
+    start = datetime.datetime.now()
+    matches = server.search(query_tokens)
+    timedelta = datetime.datetime.now() - start
+    found_fields = []
+    for match in matches:
+        field_id = server.search_engine.segment_index.get_segment(match.segment_id)[1]
+        found_fields += [field_id]
+    recall = len(set(found_fields) & set(fields)) / float(len(fields))
+    print recall, timedelta.total_seconds(), len(fields), query_tokens

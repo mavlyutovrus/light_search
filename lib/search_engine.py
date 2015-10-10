@@ -2,17 +2,12 @@
 from parsers import TParsersBundle
 from ling_utils import TTokenMatch
 from ling_utils import CASE_UPPER, CASE_TITLE, CASE_LOWER
-
-class TIndexingObjectField(object):
-    def __init__(self, field_id, field_value, field_file_path):
-        self.field_id = field_id
-        self.field_file_path = field_file_path
-        self.field_value = field_value
-
-class TIndexingObjectData(object):
-    def __init__(self, object_id, object_fields):
-        self.object_id = object_id
-        self.object_fields = object_fields
+from segments_index import TSegmentIndexReader
+from word_index import TWordIndexReader
+import pickle
+import shelve
+import os
+import sys
         
 class TSearchEngineResult(object):
     def __init__(self, segment_id, result_weight, words2select):
@@ -21,72 +16,17 @@ class TSearchEngineResult(object):
         self.words2select = words2select
 
 class TSearchEngine(object):
-    """if a word has a higher frequency in the dataset, 
-        all occurrences after that amount will be served by  BloomFilter"""
-    MAX_WORD_FREQ = 100000
-    MAX_QUERY_SIZE = 5
     SEGMENT_SIZE = 128
+    MAX_QUERY_SIZE = 5
     CRUDE_FILTER_TRIM_PROPORTION = 0.1
     CRUDE_FILTER_MAX_SELECT = 1000
     STAT_FILTER_CONTEXT = 2
     
-    def __init__(self, index_location="./", readonly=True):
-        import os
-        import shelve
-        from pybloom import ScalableBloomFilter
-        self.readonly = readonly
-        self.index_location = index_location
+    def __init__(self, index_location="./"):
         self.parsers = TParsersBundle()
-        self.word_freqs = shelve.open(os.path.join(index_location, "word_freqs.db"), writeback= (not readonly))
-        self.word_index = shelve.open(os.path.join(index_location, "main_index.db"), writeback= (not readonly))
-        self.segment_index = shelve.open(os.path.join(index_location, "segments.db"), writeback= (not readonly))
-        #TODO: serialize counter
-        self.segments_count = readonly and -1 or len(self.segment_index)
-        self.filter_location = os.path.join(index_location, "prob_filter.db")
-        if os.path.exists(self.filter_location):
-            self.prob_filter = ScalableBloomFilter.fromfile(open(self.filter_location, "rb"))  
-        else:
-            self.prob_filter = ScalableBloomFilter(error_rate=0.1, 
-                                                   mode=ScalableBloomFilter.LARGE_SET_GROWTH,
-                                                   initial_capacity=1000000000)     
-    
-    def save_updates(self):
-        if self.readonly:
-            return
-        self.word_index.sync()
-        self.word_freqs.sync()
-        self.segment_index.sync()
-        out = open(self.filter_location, "wb")
-        self.prob_filter.tofile(out)
-        out.close()
-    
-    def __del__(self):
-        self.save_updates()
-        self.word_index.close()
-        self.word_freqs.close()
-        self.segment_index.close()
-        print "Index is closed."
-    
-    def add_segment(self, start, 
-                          length,
-                          object_id, 
-                          field_id):
-        segment_id = self.segments_count
-        self.segments_count += 1
-        self.segment_index[str(segment_id)] = (object_id, field_id, start, length)
-        return segment_id
-    
-    def hash4prob_filter(self, word, code):
-        import hashlib
-        return int(hashlib.md5(word + "_" + str(code)).hexdigest(), 16)
-    
-    def to_probalistic_filter(self, word, code):
-        hash_value = self.hash4prob_filter(word, code)
-        self.prob_filter.add(hash_value)
-    
-    def check_coocurence_in_filter(self, word, code):
-        hash_value = self.hash4prob_filter(word, code)
-        return hash_value in self.prob_filter
+        self.word_freqs = shelve.open(os.path.join(index_location, "word_freqs.db"), writeback=False)
+        self.word_index = TWordIndexReader(index_location)
+        self.segment_index = TSegmentIndexReader(index_location)
     
     def match2code(self, segment_id, position, match_weight=0):
         """ position < SEGMENT_SIZE """
@@ -103,75 +43,42 @@ class TSearchEngine(object):
         match_weight, code = code % 4, (code >> 2)
         position, segment_id = code % TSearchEngine.SEGMENT_SIZE, code / TSearchEngine.SEGMENT_SIZE
         return segment_id, position, match_weight
-        
-    def to_word_index(self, token, coordinate):
-        self.word_index.setdefault(token, []).append(coordinate)           
-        
-    def to_index(self, tokens_matches, indexing_object, field_id):
-        """ !!! matches sorted by start value !!! """
-        for first_match_index in xrange(0, len(tokens_matches), TSearchEngine.SEGMENT_SIZE):
-            last_match_index = min(first_match_index + TSearchEngine.SEGMENT_SIZE - 1, 
-                                   len(tokens_matches) - 1)
-            first_match = tokens_matches[first_match_index] 
-            last_match = tokens_matches[last_match_index]
-            segment_start = first_match.start
-            segment_length = last_match.start + last_match.length - segment_start
-            segment_id = self.add_segment(segment_start, 
-                                          segment_length,
-                                          indexing_object.object_id, 
-                                          field_id)       
-            for match_index in xrange(first_match_index, last_match_index + 1):
-                segment_match = tokens_matches[match_index]
-                segment_match_index = match_index - first_match_index
-                segment_token = segment_match.token
-                offset_in_segment = segment_match.start - segment_start
-                self.word_freqs.setdefault(segment_token, 0)
-                self.word_freqs[segment_token] += 1
-                word_case_weight = segment_match.case == CASE_UPPER and 2 or segment_match.case == CASE_TITLE and 1 or 0
-                if self.word_freqs[segment_token] > TSearchEngine.MAX_WORD_FREQ:
-                    code = self.match2code(segment_id, segment_match_index)
-                    self.to_probalistic_filter(segment_token, code)
-                else:
-                    code = self.match2code(segment_id, segment_match_index, word_case_weight)
-                    self.to_word_index(segment_token, code)
+ 
 
-    def index_object(self, indexing_object):
-        import datetime
-        for field in indexing_object.object_fields:
-            tokens_matches = []
-            if field.field_value:
-                tokens_matches = self.parsers.parse_buffer(field.field_value)
-            elif field.field_file_path:
-                tokens_matches = self.parsers.parse_file(field.field_file_path)
-            if tokens_matches:
-                self.to_index(tokens_matches, indexing_object, field.field_id)
-    
     def shortest_span(self, positions):
-        counts_inside = {}
         position_token_pairs = []
-        for token, positions in positions.items():
-            counts_inside[token] = len(positions)
-            for position_data in positions:
+        counts_inside = {}
+        for token, token_positions in positions.items():
+            counts_inside[token] = len(token_positions)
+            for position_data in token_positions:
                 position_token_pairs += [(position_data, token)]
         position_token_pairs.sort()
         first = 0
-        last = len(position_token_pairs) - 1
-        while first < last:
-            if counts_inside[position_token_pairs[first][1]] > 1:
-                counts_inside[position_token_pairs[first][1]] -= 1
-                first += 1
-            else:
-                break
-        while first < last:
-            if counts_inside[position_token_pairs[last][1]] > 1:
-                counts_inside[position_token_pairs[last][1]] -= 1
-                last -= 1
-            else:
-                break
+        last = 0
+        uniq_tokens_count = len(positions.keys())
+        counts_inside = {token: 0 for token in positions.keys()}
+        counts_inside[position_token_pairs[first][1]] = 1
+        def uniq_tokens_in_span():
+            return sum(1 for value in counts_inside.values() if value)
+        shortest_span = None
+        shortest_span_len = -1
+        while first <= len(position_token_pairs) - uniq_tokens_count:
+            while uniq_tokens_in_span() < uniq_tokens_count and last + 1 < len(position_token_pairs):
+                last += 1
+                counts_inside[position_token_pairs[last][1]] += 1
+            if uniq_tokens_in_span():
+                span_len = last - first + 1
+                if not shortest_span or span_len < shortest_span_len:
+                    shortest_span = (first, last)
+                    shortest_span_len = span_len
+            counts_inside[position_token_pairs[first][1]] -= 1
+            first += 1
+        first, last = shortest_span
         return position_token_pairs[first:last + 1]
 
     def token2idf(self, token):
-        return 1.0 / (float(self.word_freqs[token]) + 1.0)
+        token_freq = token in self.word_freqs and self.word_freqs[token] or 1.0
+        return 1.0 / (float(token_freq) + 1.0)
         
     def get_order_weight(self, query_tokens, span_word_matches):
         query_pairs = {}
@@ -203,9 +110,10 @@ class TSearchEngine(object):
         matched_words_count = len(set(token for _, token in span_word_matches))
         return (matched_words_count, weight)
     
-    def add_matches_from_stat_filter(self, by_segment, query_tokens):
-        hypos = [token for token in set(query_tokens) \
-                 if self.word_freqs[token] > TSearchEngine.MAX_WORD_FREQ]
+    def add_matches_from_stat_filter(self, by_segment, tokens_occurrences):
+        """token_occurence = (first 100K occurrences, bloom filter for the other occurrences)"""
+        hypos = [token for token, token_occurrences in tokens_occurrences.items() \
+                                                    if token_occurrences[1]]
         hypos = set(hypos)
         hypo_checks = 0
         for segment_id in by_segment.keys():
@@ -226,21 +134,21 @@ class TSearchEngine(object):
                 hypo_checks += 1
                 for position in positions2check:
                     code = self.match2code(segment_id, position)
-                    in_filter = self.check_coocurence_in_filter(hypo, code)
+                    in_filter = code in tokens_occurrences[hypo][1]
                     if in_filter:
                         by_segment[segment_id].setdefault(hypo, []).append((position, CASE_LOWER))
         
-    def get_initial_matches(self, query_tokens, token2idf):
+    def get_initial_matches(self, tokens_occurrences, token2idf):
         #TODO: currently not able to properly search queries with duplicated words
-        query_tokens = set(query_tokens)
-        tokens_occurences = [(token2idf[query_token], query_token, self.word_index[query_token], ) \
-                                                    for query_token in query_tokens]
-        tokens_occurences.sort(reverse=True) #max weight first
-        max_possible_gain = sum(token_weight for token_weight, _, _ in tokens_occurences)
+        """token_occurences = (first 100K occurrences, bloom filter for the other occurrences)"""
+        by_idf = [(token2idf[token], token, token_occurrences[0]) \
+                                    for token, token_occurrences in tokens_occurrences.items()]
+        by_idf.sort(reverse=True) #max weight first
+        max_possible_gain = sum(token_weight for token_weight, _, _ in by_idf)
         add_segments = True
         by_segment_crude_weight = {}
         max_weight = 0.0
-        for token_weight, token, codes in tokens_occurences:
+        for token_weight, token, codes in by_idf:
             prev_segment_id = -1
             for code in codes:
                 segment_id = self.code2segment_id(code)
@@ -260,7 +168,7 @@ class TSearchEngine(object):
         by_segment = {}
         for _, segment_id in by_segment_crude_weight[:TSearchEngine.CRUDE_FILTER_MAX_SELECT]:
             by_segment[segment_id] = {}        
-        for _, token, codes in tokens_occurences:
+        for _, token, codes in by_idf:
             for code in codes:
                 segment_id = self.code2segment_id(code)
                 if segment_id in by_segment:
@@ -284,17 +192,33 @@ class TSearchEngine(object):
     
     """ return list of TSearchEngineResult sorted by weights (high weight first) """
     def search(self, query):
+        query_tokens = query
+        """
         if type(query) == unicode:
             query = query.encode("utf8") 
         query_matches = self.parsers.parse_buffer(query)
-        query_tokens = [match.token for match in query_matches]        
+        query_tokens = [match.token for match in query_matches]
+        """
         
+        import datetime
+        #s = datetime.datetime.now()
         query_tokens = self.trim_query_tokens(query_tokens)
         local_token2idf = {token:self.token2idf(token)  for token in query_tokens}
+        #print "timedelta parse query", datetime.datetime.now() - s
         
-        by_segment = self.get_initial_matches(query_tokens, local_token2idf)
-        self.add_matches_from_stat_filter(by_segment, query_tokens)
+        #s = datetime.datetime.now()
+        tokens_occurences = {token: self.word_index.get_occurences(token) for token in set(query_tokens)}
+        #print "timedelta get occurences", datetime.datetime.now() - s
         
+        #s = datetime.datetime.now()
+        by_segment = self.get_initial_matches(tokens_occurences, local_token2idf)
+        #print "timedelta init matches", datetime.datetime.now() - s
+        
+        #s = datetime.datetime.now()
+        self.add_matches_from_stat_filter(by_segment, tokens_occurences)
+        #print "stat filter timedelta", datetime.datetime.now() - s
+        
+        #s = datetime.datetime.now()
         results_with_weights = []
         for segment_id, positions in by_segment.items():
             span_word_matches = self.shortest_span(positions)
@@ -304,6 +228,8 @@ class TSearchEngine(object):
                                     for position_word_case in token_positions \
                                         if position_word_case[0] >= span_start and position_word_case[0] <= span_end]
             results_with_weights += [(match_weight, TSearchEngineResult(segment_id, match_weight, words2select))]
+        #print "weights timedelta", datetime.datetime.now() - s
+        
         results_with_weights.sort(reverse=True)
         results = [result for _, result in results_with_weights]
         return results

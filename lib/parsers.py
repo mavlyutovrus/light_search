@@ -52,10 +52,10 @@ class TParsersBundle(object):
                 return parser.parse_file(file_name, encoding)
         raise Exception("Parsing:", "No parser for file %s" % (file_name))
     
-    def parse_buffer(self, buffer):
+    def parse_buffer(self, buffer, encoding=""):
         for parser in self.parsers:
             if parser.buffer_of_my_type(buffer):
-                return parser.parse_buffer(buffer)
+                return parser.parse_buffer(buffer, encoding)
         raise Exception("Parsing:", "No parser for buffer %s" % (buffer))
         
 

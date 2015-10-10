@@ -25,7 +25,9 @@ class TCustomCounter:
         if self.verbosity and self.value % self.interval == 0:
             self.log_stream.write("Logger: " + self.name + ", value: " + str(self.value) + ", time: " + str(datetime.now())+ "\n")
             self.log_stream.flush()
-
-            
-        
+    def log_state(self):
+        from datetime import datetime
+        self.log_stream.write("Logger: " + self.name + ", value: " + str(self.value) + ", time: " + str(datetime.now())+ "\n")
+        self.log_stream.flush()
+    
         
