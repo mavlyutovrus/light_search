@@ -128,7 +128,7 @@ class TSearchEngine(object):
                 for position, word_case in token_positions:
                     taken_positions += [position]
                     context_start = max(0, position - TSearchEngine.STAT_FILTER_CONTEXT)
-                    context_end = position + TSearchEngine.STAT_FILTER_CONTEXT + 1
+                    context_end = min(TSearchEngine.SEGMENT_SIZE, position + TSearchEngine.STAT_FILTER_CONTEXT + 1)
                     positions2check += range(context_start, context_end)
             positions2check = set(positions2check) - set(taken_positions)        
             for hypo in words2check:

@@ -19,5 +19,4 @@ class TWordIndexReader(object):
         prob_filter = None
         if bloom_filter_dump_size:
             prob_filter = BloomFilter.fromfile(self.values_file, bloom_filter_dump_size)
-        print "-->", token, len(codes), prob_filter and prob_filter.capacity or 0
         return codes, prob_filter
