@@ -25,6 +25,7 @@ class TSearchServer(object):
             matches = self.search_engine.parsers.parse_buffer(snippet, "windows-1251")
             to_select = []
             for token, position in result.words2select:
+                print "token", token, "position", position
                 to_select += [(matches[position].start, matches[position].start + matches[position].length)]
             to_select.sort()
             for sel_index in xrange(len(to_select) - 1, -1, -1):

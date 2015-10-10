@@ -17,7 +17,7 @@ class TSearchEngineResult(object):
 
 class TSearchEngine(object):
     MAX_WORD_FREQ = 100000
-    SEGMENT_SIZE = 30 # words
+    SEGMENT_SIZE = 32 # words
     MAX_QUERY_SIZE = 5
     CRUDE_FILTER_TRIM_PROPORTION = 0.1
     CRUDE_FILTER_MAX_SELECT = 1000

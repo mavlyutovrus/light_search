@@ -15,6 +15,7 @@ indices_dir = "indices2/" # sys.argv[3]
 
 
 start = datetime.now()
+abs_start = start
 
 crawler = TCrawler(verbosity=1)
 books = [indexing_object for indexing_object in crawler.crawl_folder(books_dir)]
@@ -46,6 +47,8 @@ reduce(reducers_fnames, indices_dir, intermid_results_dir, processes_number=10)
 
 print "Reduce:", datetime.now() - start
 
+
+print "Total time:", datetime.now() - abs_start
 
 
 
