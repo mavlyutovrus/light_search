@@ -52,15 +52,15 @@ class TSegmentIndexReader():
         block_index, offset_in_block = divmod(segment_id, SEGMENTS_OFFSETS_BLOCK_SIZE)
         block_offset = self.skip_list[block_index]
         self.values_file.seek(block_offset)
-        doc_id = ""
+        obj_id = ""
         field_id = ""
         for _ in xrange(offset_in_block + 1):
-            curr_doc_id, curr_field_id, start, length = pickle.load(self.values_file)
-            if curr_doc_id:
-                doc_id = curr_doc_id
+            curr_obj_id, curr_field_id, start, length = pickle.load(self.values_file)
+            if curr_obj_id:
+                obj_id = curr_obj_id
             if curr_field_id:
                 field_id = curr_field_id
-        return object_id, field_id, start, length
+        return obj_id, field_id, start, length
         
         
         
