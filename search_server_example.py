@@ -19,13 +19,12 @@ class TSearchServer(object):
     def search(self, query):
         results = self.search_engine.search(query)
         to_return = results
-        #return to_return
+        return to_return
         for result in results[:10]:
             snippet = self.get_segment_snippet(result.segment_id)
             matches = self.search_engine.parsers.parse_buffer(snippet, "windows-1251")
             to_select = []
             for token, position in result.words2select:
-                print "token", token, "position", position
                 to_select += [(matches[position].start, matches[position].start + matches[position].length)]
             to_select.sort()
             for sel_index in xrange(len(to_select) - 1, -1, -1):
@@ -37,7 +36,7 @@ class TSearchServer(object):
 
 server = TSearchServer(port=1234, 
                        books_folder="/home/arslan/src/ngpedia/books1000", 
-                       index_folder="indices2/")
+                       index_folder="indices/")
 
 print "start"
 
@@ -48,7 +47,7 @@ for line in open("selected_queries.txt"):
     query, fields = line[:-1].split("\t")
     fields = fields.split()
     query_tokens = query.split("_")
-    if query_tokens != ['18', '15', '22']:
+    if len(query_tokens) < 5:
         continue
     start = datetime.datetime.now()
     matches = server.search(query_tokens)

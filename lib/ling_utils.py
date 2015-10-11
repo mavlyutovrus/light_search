@@ -50,7 +50,7 @@ class TTokenMatch(object):
         return "[%d:%d]=%s{%f}" % (self.start, self.start + self.length, self.token, self.case)
 
 #encoded_text_buffer - text before applying .decode(...)
-def span_tokenize(encoded_text_buffer, encoding="", fast=False):
+def span_tokenize(encoded_text_buffer, encoding=""):
     #detect encoding
     if not encoding:
         try:
@@ -72,34 +72,77 @@ def span_tokenize(encoded_text_buffer, encoding="", fast=False):
         text = ""
     matches = []
     buffer_position = 0
-    for match in re.finditer(TOKENIZATION_PATTERN, text):
-        word = match.group()
-        start, length = match.start(), len(word)
-        word_in_orig_encoding = word.encode(encoding)
-        buffer_position = encoded_text_buffer.index(word_in_orig_encoding, buffer_position)
-        word_case = is_upper_case_word(word) and CASE_UPPER or is_title_case_word(word) and CASE_TITLE or CASE_LOWER
-        match = TTokenMatch(start=buffer_position, 
-                            length=len(word_in_orig_encoding), 
-                            case=word_case, 
-                            token=word)
-        buffer_position += len(word_in_orig_encoding)
-        matches.append(match)
+    word = ""
+    text += " " # dummy to not check the tail
+    for char in text:
+        if                 char >= u'а' and char <= u'я' or char >= u'А' and char <= u'Я'\
+                        or char == u'Ё'\
+                        or char == u'ё' \
+                        or char >= 'a' and char <= 'z' or char >= u'A' and char <= u'Z' \
+                        or char >= '0' and char <= '9':
+            word += char
+        elif word:
+            word_in_orig_encoding = word.encode(encoding)
+            buffer_position = encoded_text_buffer.index(word_in_orig_encoding, buffer_position)
+            word_case = is_upper_case_word(word) and CASE_UPPER or is_title_case_word(word) and CASE_TITLE or CASE_LOWER
+            match = TTokenMatch(start=buffer_position, 
+                                length=len(word_in_orig_encoding), 
+                                case=word_case, 
+                                token=word)
+            buffer_position += len(word_in_orig_encoding)
+            matches.append(match)
+            word = ""
+    return matches
+
+A_SMALL_CODE = ord('a'.encode("windows-1251"))
+Z_SMALL_CODE = ord('z'.encode("windows-1251"))
+A_BIG_CODE = ord('A'.encode("windows-1251"))
+Z_BIG_CODE = ord('Z'.encode("windows-1251"))
+ZERO_CODE = ord('0'.encode("windows-1251"))
+NINE_CODE = ord('9'.encode("windows-1251"))
+AR_SMALL_CODE = ord(u'а'.encode("windows-1251"))
+YAR_SMALL_CODE = ord(u'я'.encode("windows-1251"))
+AR_BIG_CODE = ord(u'А'.encode("windows-1251"))
+YAR_BIG_CODE = ord(u'Я'.encode("windows-1251"))
+YOR_SMALL_CODE = ord(u'ё'.encode("windows-1251"))
+YOR_BIG_CODE = ord(u'Ё'.encode("windows-1251"))
+
+GOOD_CODES_WIN1251 = range(A_SMALL_CODE, Z_SMALL_CODE + 1) + \
+             range(A_BIG_CODE, Z_BIG_CODE + 1) + \
+             range(ZERO_CODE, NINE_CODE + 1) + \
+             range(AR_SMALL_CODE, YAR_SMALL_CODE + 1) + \
+             range(AR_BIG_CODE, YAR_BIG_CODE + 1) + \
+             [YOR_BIG_CODE, YOR_SMALL_CODE]
+GOOD_CODES_WIN1251 = set(GOOD_CODES_WIN1251)
+GOOD_CHARS_WIN1251 = set(chr(code) for code in GOOD_CODES_WIN1251)
+UPPER_GOOD_CHARS_WIN1251 = set(chr(code) for code in range(A_BIG_CODE, Z_BIG_CODE + 1) + \
+                                                range(AR_BIG_CODE, YAR_BIG_CODE + 1) + [YOR_BIG_CODE])
+
+"""blazingly fast, super-over-optimized, vital for speed!!!"""
+def span_tokenize_windows1251(encoded_text_buffer):
+    matches = []
+    encoded_text_buffer += " " # dummy to not check the tail
+    start = -1
+    position = -1
+    first_char = ''
+    for char in encoded_text_buffer:
+        position += 1
+        if char in GOOD_CHARS_WIN1251:
+            if start == -1:
+                start = position
+                first_char = char
+        elif start != -1:
+            word_case = first_char in UPPER_GOOD_CHARS_WIN1251 and CASE_TITLE or CASE_LOWER
+            match = (start, position-start, word_case, encoded_text_buffer[start:position])
+            matches.append(match)
+            start = -1
     return matches
 
 
-#tokens = list of TTokenMatch
-def unify_tokens(tokens):
-    for index in xrange(len(tokens)):
-        word = tokens[index].token
-        #only russian words + do not stem short words
-        stemmed_word = len(word) > 4 and RussianStemmer.stemWord(word) or word
-        unified_word = unidecode.unidecode(stemmed_word)
-        tokens[index].token = unified_word.lower()
+def unify_word(word):
+    stemmed_word = len(word) > 4 and RussianStemmer.stemWord(word) or word
+    unified_word = unidecode.unidecode(stemmed_word)
+    return unified_word.lower()
 
-
-def adjust2next_space(text, position):
-    while position < len(text) and not text[position].isspace():
-        position += 1
-    return position
 
         

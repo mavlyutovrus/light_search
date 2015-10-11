@@ -5,7 +5,6 @@ from ling_utils import CASE_UPPER, CASE_TITLE, CASE_LOWER
 from segments_index import TSegmentIndexReader
 from word_index import TWordIndexReader
 import pickle
-import shelve
 import os
 import sys
         
@@ -25,7 +24,6 @@ class TSearchEngine(object):
     
     def __init__(self, index_location="./"):
         self.parsers = TParsersBundle()
-        self.word_freqs = shelve.open(os.path.join(index_location, "word_freqs.db"), writeback=False)
         self.word_index = TWordIndexReader(index_location)
         self.segment_index = TSegmentIndexReader(index_location)
     
@@ -77,8 +75,7 @@ class TSearchEngine(object):
         first, last = shortest_span
         return position_token_pairs[first:last + 1]
 
-    def token2idf(self, token):
-        token_freq = token in self.word_freqs and self.word_freqs[token] or 1.0
+    def freq2idf(self, token_freq):
         return 1.0 / (float(token_freq) + 1.0)
         
     def get_order_weight(self, query_tokens, span_word_matches):
@@ -201,14 +198,15 @@ class TSearchEngine(object):
         query_tokens = [match.token for match in query_matches]
         """
         
-        import datetime
+        #import datetime
         #s = datetime.datetime.now()
         query_tokens = self.trim_query_tokens(query_tokens)
-        local_token2idf = {token:self.token2idf(token)  for token in query_tokens}
+        tokens_occurences = {token: self.word_index.get_occurences(token) for token in set(query_tokens)}
+        local_token2idf = {token:self.freq2idf(tokens_occurences[token][-1])  for token in query_tokens}
         #print "timedelta parse query", datetime.datetime.now() - s
         
         #s = datetime.datetime.now()
-        tokens_occurences = {token: self.word_index.get_occurences(token) for token in set(query_tokens)}
+        
         #print "timedelta get occurences", datetime.datetime.now() - s
         
         #s = datetime.datetime.now()

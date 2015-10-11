@@ -12,11 +12,11 @@ class TWordIndexReader(object):
     
     def get_occurences(self, token):
         if not token in self.keys_db:
-            return [], None
+            return [], None, 0
         word_freq, offset, bloom_filter_dump_size = self.keys_db[token]
         self.values_file.seek(offset)
         codes = pickle.load(self.values_file)
         prob_filter = None
         if bloom_filter_dump_size:
             prob_filter = BloomFilter.fromfile(self.values_file, bloom_filter_dump_size)
-        return codes, prob_filter
+        return codes, prob_filter, word_freq

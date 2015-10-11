@@ -7,6 +7,10 @@ import shelve
 import os
 import sys
 
+MIN_WORD_FREQ_FOR_INDEX = 5
+MAX_WORD_FREQ_FOR_INDEX = 100000000 
+
+
 def prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid=""):
     keys_out = open(keys_out_fname, "wb", buffering=1000000)
     values_out = open(values_out_fname, "wb", buffering=1000000)
@@ -25,6 +29,8 @@ def prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid=""):
         
     for token, chunks in tokens.items():
         token_freq = tokens_freqs[token]
+        if token_freq < MIN_WORD_FREQ_FOR_INDEX or token_freq > MAX_WORD_FREQ_FOR_INDEX:
+            continue
         all2index = token_freq < 2 * TSearchEngine.MAX_WORD_FREQ
         prob_filter = None
         if not all2index:
@@ -57,18 +63,20 @@ def prepare_matches_worker(task):
     prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid)
 
 
-def reduce(reducers_chunks, indices_dir, intermid_results_dir, processes_number=10):
+def reduce(reducers_chunks, intermid_results_dir,indices_dir, processes_number=5):
     tasks = []
     for pid, chunk_fname in zip(range(len(reducers_chunks)), reducers_chunks):
         keys_fname = os.path.join(intermid_results_dir, str(pid) + "_" + "keys.pickle")
         values_fname = os.path.join(intermid_results_dir, str(pid) + "_" + "values.pickle")
         tasks += [(chunk_fname, keys_fname, values_fname, pid)]
-    
-    prepare_matches_worker(tasks[0])
-    
+    """
+    for task in tasks:
+        prepare_matches_worker(task)
+    """
     from multiprocessing import Pool
     pool = Pool(processes_number)
     pool.map(prepare_matches_worker, tasks)
+    
     
     index_values_fname = os.path.join(indices_dir, "main_index_values.pickle")
     index_keys_fname =  os.path.join(indices_dir, "main_index_keys.db")
