@@ -7,8 +7,11 @@ import shelve
 import os
 import sys
 
+
+
 MIN_WORD_FREQ_FOR_INDEX = 5
 MAX_WORD_FREQ_FOR_INDEX = 100000000 
+
 
 
 def prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid=""):
@@ -63,27 +66,73 @@ def prepare_matches_worker(task):
     prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid)
 
 
-def reduce(reducers_chunks, intermid_results_dir,indices_dir, processes_number=5):
+def get_optimal_proc_count(fsizes_mb):
+    import psutil
+    import math
+    mem_avail_mb = psutil.virtual_memory().available >> 20 #bytes -> mb
+    mem_avail_mb = mem_avail_mb * 0.8 # leave some space
+    if max(fsizes_mb) > mem_avail_mb:
+        raise Exception("not enough phys. memory to process biggest chunk")
+    fastest = None
+    fastest_proc_count = None
+    MAX_PROC_COUNT = 10
+    for proc_count in xrange(1, MAX_PROC_COUNT + 1):
+        max_file_size4mult = mem_avail_mb / proc_count
+        for_multiproc = [fsize for fsize in fsizes_mb if fsize < max_file_size4mult] 
+        for_singleproc = [fsize for fsize in fsizes_mb if fsize >= max_file_size4mult]
+        
+        time_estim = sum(for_singleproc) + sum(for_multiproc) / math.log(proc_count + 1.0)
+        if not fastest or fastest > time_estim:
+            fastest = time_estim
+            fastest_proc_count = proc_count
+    return  proc_count, max_file_size4mult
+
+def reduce(intermid_results_dir,indices_dir, log_out):
+    reducers_chunks = [os.path.join(intermid_results_dir, fname) for fname in os.listdir(intermid_results_dir) \
+                                    if fname.startswith("pool_")]
+    
     tasks = []
+    fsizes = []
     for pid, chunk_fname in zip(range(len(reducers_chunks)), reducers_chunks):
         keys_fname = os.path.join(intermid_results_dir, str(pid) + "_" + "keys.pickle")
         values_fname = os.path.join(intermid_results_dir, str(pid) + "_" + "values.pickle")
-        tasks += [(chunk_fname, keys_fname, values_fname, pid)]
-    """
-    for task in tasks:
-        prepare_matches_worker(task)
-    """
-    from multiprocessing import Pool
-    pool = Pool(processes_number)
-    pool.map(prepare_matches_worker, tasks)
+        fsize = os.path.getsize(chunk_fname) >> 20 #bytes -> mb
+        fsizes.append(fsize)
+        tasks += [(fsize, (chunk_fname, keys_fname, values_fname, pid))]
     
+    proc_count, max_file_size4mult = get_optimal_proc_count(fsizes)
+    
+    single_proc_tasks = [task for fsize, task in tasks if fsize >= max_file_size4mult]
+    mult_proc_tasks = [task for fsize, task in tasks if fsize < max_file_size4mult]
+    
+    log_out.write("..optimal proc count: %d\n" % (proc_count))
+    log_out.write("..max size for mult proc: %dmb\n" % (max_file_size4mult))
+    log_out.write("..files for single proc: %d\n" % (len(single_proc_tasks)))    
+    log_out.write("..files for mult proc: %d\n" % (len(mult_proc_tasks))) 
+    log_out.flush()
+    
+    log_out.write("Singleprocessing for big files.\n") 
+    log_out.flush() 
+       
+    for task in single_proc_tasks:
+        prepare_matches_worker(task)
+        
+    log_out.write("Multiprocessing.\n") 
+    log_out.flush()
+         
+    from multiprocessing import Pool
+    pool = Pool(proc_count)
+    pool.map(prepare_matches_worker, mult_proc_tasks)
+    
+    log_out.write("Joining parts of the index.\n") 
+    log_out.flush()
     
     index_values_fname = os.path.join(indices_dir, "main_index_values.pickle")
     index_keys_fname =  os.path.join(indices_dir, "main_index_keys.db")
     index_values_file = open(index_values_fname, "wb", buffering=1000000)
     index_keys_db = shelve.open(index_keys_fname, writeback=True)
     
-    for _, keys_fname, values_fname, _ in tasks:
+    for _, keys_fname, values_fname, _ in single_proc_tasks + mult_proc_tasks:
         chunk_offset = index_values_file.tell()
         values_data = open(values_fname, "rb").read()
         index_values_file.write(values_data)

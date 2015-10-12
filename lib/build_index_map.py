@@ -1,8 +1,7 @@
 #-*- coding:utf8 -*-
-from lib.parsers import TParsersBundle
+from lib.crawler import TCrawler
 from lib.search_engine import TSearchEngine
 from segments_index import TSegmentIndexWriter
-from lib.crawler import TCrawler
 from lib.utils import TCustomCounter
 from lib.ling_utils import TTokenMatch
 from lib.ling_utils import CASE_UPPER, CASE_TITLE, CASE_LOWER
@@ -16,14 +15,20 @@ SEGMENT_SIZE = TSearchEngine.SEGMENT_SIZE
 REDUCERS_COUNT = 100
 REDUCERS_FILES_BUFFER = 1000000 #1MB
 
-def build_index_map(books, intermid_results_dir, indices_dir, log_out):
-    segments_counter = [0]
-    words_in_buffer = [0]
-    words_index = [{}]
+def build_index_map(books_dir, intermid_results_dir, indices_dir, log_out):
+    #clear intermid_results_dir
+    for fname in os.listdir(intermid_results_dir):
+        fname = os.path.join(intermid_results_dir, fname)
+        if os.path.isfile(fname):
+            os.remove(fname)
+    
     reducers_fnames = [os.path.join(intermid_results_dir, "pool_" + str(reducer_index) + ".txt")
                                                     for reducer_index in xrange(REDUCERS_COUNT)]
     reducers_pool = [open(reducer_fname, "wb", buffering=REDUCERS_FILES_BUFFER) 
                                             for reducer_fname in reducers_fnames]
+    segments_counter = [0]
+    words_in_buffer = [0]
+    words_index = [{}]
     MAX_BUFFER_SIZE = 10000000
     
     def flush_buffer():
@@ -49,9 +54,10 @@ def build_index_map(books, intermid_results_dir, indices_dir, log_out):
         code = (code << 2) + match_weight
         return code
     
+    crawler = TCrawler(verbosity=0)
     segment_index_writer = TSegmentIndexWriter(indices_dir)
     books_counter = TCustomCounter("ParsedBooks", log_out, verbosity=1, interval=100)
-    for book_obj in books:
+    for book_obj in crawler.crawl_folder(books_dir):
         obj_id = book_obj.object_id
         for field in book_obj.object_fields:
             field_id = field.field_id
@@ -71,8 +77,6 @@ def build_index_map(books, intermid_results_dir, indices_dir, log_out):
                 for match_index in xrange(first_match_index, last_match_index + 1):
                     segment_match = tokens_matches[match_index]
                     segment_match_index = match_index - first_match_index
-                    if segment_match_index >= SEGMENT_SIZE:
-                        print "FUCKUP", segment_match_index
                     segment_token = segment_match[-1]
                     match_case = segment_match[-2]
                     word_case_weight = match_case == CASE_UPPER and 2 or match_case == CASE_TITLE and 1 or 0
@@ -83,6 +87,5 @@ def build_index_map(books, intermid_results_dir, indices_dir, log_out):
     for reducer in reducers_pool:
         reducer.close()
     segment_index_writer.save()
-    return reducers_fnames
 
 

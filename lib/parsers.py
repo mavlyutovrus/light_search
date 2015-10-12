@@ -31,9 +31,9 @@ class TTextParser(TParser):
     def parse_buffer(self, undecoded_text_buffer, encoding=""):
         from ling_utils import span_tokenize
         tokens = span_tokenize(undecoded_text_buffer, encoding=encoding)
-        from ling_utils import unify_tokens   
-        """replace tokens with latin keywords + all to lowercase"""
-        unify_tokens(tokens)
+        from ling_utils import unify_word
+        for token in tokens:
+            token.token = unify_word(token.token)
         return tokens 
 
     def parse_file(self, file_path, encoding=""):

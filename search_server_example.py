@@ -16,10 +16,10 @@ class TSearchServer(object):
         snippet = f.read(length)
         return snippet
     
-    def search(self, query):
-        results = self.search_engine.search(query)
+    def search(self, query, query_tokens=[]):
+        results = self.search_engine.search(query=query, query_tokens=query_tokens)
         to_return = results
-        return to_return
+        #return to_return
         for result in results[:10]:
             snippet = self.get_segment_snippet(result.segment_id)
             matches = self.search_engine.parsers.parse_buffer(snippet, "windows-1251")
@@ -50,7 +50,7 @@ for line in open("selected_queries.txt"):
     if len(query_tokens) < 5:
         continue
     start = datetime.datetime.now()
-    matches = server.search(query_tokens)
+    matches = server.search("", query_tokens=query_tokens)
     timedelta = datetime.datetime.now() - start
     found_fields = []
     for match in matches:

@@ -189,14 +189,12 @@ class TSearchEngine(object):
         return trimmed_query_tokens
     
     """ return list of TSearchEngineResult sorted by weights (high weight first) """
-    def search(self, query):
-        query_tokens = query
-        """
-        if type(query) == unicode:
-            query = query.encode("utf8") 
-        query_matches = self.parsers.parse_buffer(query)
-        query_tokens = [match.token for match in query_matches]
-        """
+    def search(self, query, query_tokens=[]):
+        if not query_tokens:
+            if type(query) == unicode:
+                query = query.encode("utf8") 
+            query_matches = self.parsers.parse_buffer(query)
+            query_tokens = [match.token for match in query_matches]
         
         #import datetime
         #s = datetime.datetime.now()

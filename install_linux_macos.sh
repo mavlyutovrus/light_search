@@ -4,3 +4,4 @@ sudo pip install unidecode
 sudo pip install chardet
 sudo pip install snowballstemmer
 sudo pip install pybloom
+sudo pip install psutil
