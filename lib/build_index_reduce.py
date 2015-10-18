@@ -28,7 +28,7 @@ def prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid=""):
         tokens_freqs.setdefault(token, 0)
         tokens_freqs[token] += len(token_codes)
         
-    progress_counter = TCustomCounter("Reducer%s" % (str(pid)), sys.stdout, verbosity=1, interval=1000)
+    progress_counter = TCustomCounter("Reducer%s" % (str(pid)), sys.stdout, verbosity=1, interval=10000)
         
     for token, chunks in tokens.items():
         token_freq = tokens_freqs[token]
@@ -38,7 +38,7 @@ def prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid=""):
         prob_filter = None
         if not all2index:
             prob_filter_capacity = token_freq - TSearchEngine.MAX_WORD_FREQ
-            prob_filter = BloomFilter(capacity=prob_filter_capacity, error_rate=0.1)
+            prob_filter = BloomFilter(capacity=prob_filter_capacity, error_rate=0.01)
         codes2index = []
         send2index = TSearchEngine.MAX_WORD_FREQ
         for chunk_index in chunks:
@@ -75,7 +75,7 @@ def get_optimal_proc_count(fsizes_mb):
         raise Exception("not enough phys. memory to process biggest chunk")
     fastest = None
     fastest_proc_count = None
-    MAX_PROC_COUNT = 10
+    MAX_PROC_COUNT = 3 
     for proc_count in xrange(1, MAX_PROC_COUNT + 1):
         max_file_size4mult = mem_avail_mb / proc_count
         for_multiproc = [fsize for fsize in fsizes_mb if fsize < max_file_size4mult] 

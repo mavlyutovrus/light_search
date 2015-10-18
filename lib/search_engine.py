@@ -19,7 +19,7 @@ class TSearchEngine(object):
     SEGMENT_SIZE = 32 # words
     MAX_QUERY_SIZE = 5
     CRUDE_FILTER_TRIM_PROPORTION = 0.1
-    CRUDE_FILTER_MAX_SELECT = 1000
+    CRUDE_FILTER_MAX_SELECT = 10000
     STAT_FILTER_CONTEXT = 2
     
     def __init__(self, index_location="./"):
@@ -178,7 +178,7 @@ class TSearchEngine(object):
     def trim_query_tokens(self, query_tokens):
         if len(query_tokens) <= TSearchEngine.MAX_QUERY_SIZE:
             return query_tokens
-        with_freqs = [(token in self.word_freqs and self.word_freqs[token] or 0, token)\
+        with_freqs = [(token in self.word_index.keys_db and self.word_index.keys_db[token][0] or 0, token)\
                                                                for token in query_tokens]
         only_freqs = [freq for freq, _ in with_freqs]
         only_freqs.sort()
