@@ -1,6 +1,9 @@
 #-*- coding:utf8 -*-
 import BaseHTTPServer
 import sys
+import socket
+
+
 
 class TSearchServer():
     def __init__(self, books_folder, index_folder):
@@ -27,13 +30,17 @@ class TSearchServer():
         for sel_index in xrange(len(to_select) - 1, -1, -1):
             sel_start, sel_end = to_select[sel_index]
             snippet = snippet[:sel_start] + "<b>" + snippet[sel_start:sel_end] + "</b>" + snippet[sel_end:]
-        snippet = snippet.decode("windows-1251").replace(chr(13), " ").replace(chr(10), " ").replace('"', "'")   
+        snippet = snippet.decode("windows-1251").replace(chr(13), " ").replace(chr(10), " ").replace('"', "'")
+        import re
+        snippet = re.subn("\s+", " ", snippet)[0]
         return snippet     
     
     def search(self, query, query_tokens=[]):
         return self.search_engine.search(query=query, query_tokens=query_tokens)
 
-"""
+
+MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
+
 port = int(sys.argv[1])
 books_folder = sys.argv[2]
 index_folder = sys.argv[3]
@@ -41,10 +48,28 @@ index_folder = sys.argv[3]
 port = 8334
 books_folder = "/home/arslan/src/ngpedia/books1000"
 index_folder ="indices/"
-
+"""
 
 server = TSearchServer(books_folder=books_folder, 
                        index_folder=index_folder)
+
+form_html = """
+<html>
+<head>
+<meta charset="utf-8">
+<title>Search page</title>
+</head>
+<body>
+<form name="search" action="http://%s:%d/" method="get">
+  <input type="text" name="q" length="20"/>
+  <input type="submit" value="search"/>
+</form>
+<pre>
+##RESULT##
+</pre>
+</body>
+</html>
+""" % (MACHINE_NETWORK_NAME, port)
 
 class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -62,6 +87,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             length = int(query["len"][0])
         except:
             length = 10
+        return_json = query.has_key("json")   
         import datetime
         start_time = datetime.datetime.now()
         match_objects = server.search(query_text)
@@ -84,9 +110,12 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         response_object["results"] = response_elems
         import json
         callback_name = query.has_key("callback") and query["callback"][0] or ""
-        response_str = json.dumps(response_object, ensure_ascii=False)
+        response_str = json.dumps(response_object, ensure_ascii=False, indent=1)
         if callback_name:
-            response_str = callback_name + "(" + response_str + "}"        
+            response_str = callback_name + "(" + response_str + "}"  
+        print return_json      
+        if not return_json:
+            response_str = form_html.replace("##RESULT##", response_str)
         response_str = response_str.encode("utf8")
         self.send_response(200)
         request_headers = self.headers.__str__().replace(chr(10), " ").replace(chr(13), " ")
