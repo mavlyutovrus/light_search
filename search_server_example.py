@@ -88,7 +88,10 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             length = 10
         return_json = query.has_key("json")   
         import datetime
-        match_objects, timings = server.search(query_text)
+        if query_text:
+            match_objects, timings = server.search(query_text)
+        else:
+            match_objects, timings = [], (0,0,0,0) 
         response_object = {}
         response_object["count"] = len(match_objects)
         response_object["ms"] = str(timings)
@@ -115,7 +118,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         response_str = response_str.encode("utf8")
         self.send_response(200)
         request_headers = self.headers.__str__().replace(chr(10), " ").replace(chr(13), " ")
-        log_line = "[STAT]\tclient:" + str(self.client_address) + "\theaders: " + request_headers + "\tquery:" + full_query + "\n"
+        log_line = "[STAT]\tclient:" + str(self.client_address) + "\theaders: " + request_headers + "\tquery:" + query_text.decode("utf8") + "\n"
         sys.stdout.write(log_line.encode("utf8"))
         sys.stdout.flush()
         self.send_header("Content-Length", str(len(response_str)))
