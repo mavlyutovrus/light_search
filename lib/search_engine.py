@@ -220,9 +220,9 @@ class TSearchEngine(object):
             words2select = [(token, position_word_case[0]) for token, token_positions in positions.items() \
                                     for position_word_case in token_positions \
                                         if position_word_case[0] >= span_start and position_word_case[0] <= span_end]
-            results_with_weights += [(match_weight, TSearchEngineResult(segment_id, match_weight, words2select))]
+            results_with_weights += [(match_weight, -segment_id, TSearchEngineResult(segment_id, match_weight, words2select))]
         results_with_weights.sort(reverse=True)
-        results = [result for _, result in results_with_weights]
+        results = [result for _, _, result in results_with_weights]
         time_assing_weights = int((datetime.datetime.now() - start).total_seconds() * 1000)
         
         return results, (time_prepare, time_initial_matches, time_stat_filter, time_assing_weights)
