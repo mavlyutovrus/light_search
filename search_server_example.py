@@ -3,8 +3,6 @@ import BaseHTTPServer
 import sys
 import socket
 
-
-
 class TSearchServer():
     def __init__(self, books_folder, index_folder):
         self.books_folder = books_folder
@@ -40,6 +38,7 @@ class TSearchServer():
 
 
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
+
 
 port = int(sys.argv[1])
 books_folder = sys.argv[2]
@@ -89,7 +88,6 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             length = 10
         return_json = query.has_key("json")   
         import datetime
-        start_time = datetime.datetime.now()
         match_objects, timings = server.search(query_text)
         response_object = {}
         response_object["count"] = len(match_objects)
@@ -111,8 +109,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         callback_name = query.has_key("callback") and query["callback"][0] or ""
         response_str = json.dumps(response_object, ensure_ascii=False, indent=1)
         if callback_name:
-            response_str = callback_name + "(" + response_str + "}"  
-        print return_json      
+            response_str = callback_name + "(" + response_str + "}"      
         if not return_json:
             response_str = form_html.replace("##RESULT##", response_str)
         response_str = response_str.encode("utf8")
