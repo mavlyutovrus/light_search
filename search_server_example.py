@@ -90,11 +90,10 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         return_json = query.has_key("json")   
         import datetime
         start_time = datetime.datetime.now()
-        match_objects = server.search(query_text)
-        delta_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
+        match_objects, timings = server.search(query_text)
         response_object = {}
         response_object["count"] = len(match_objects)
-        response_object["ms"] = delta_ms
+        response_object["ms"] = str(timings)
         response_elems = []
         for res_index in xrange(start, start + length):
             if res_index >= len(match_objects):
