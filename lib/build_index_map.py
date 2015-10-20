@@ -14,8 +14,16 @@ import os
 SEGMENT_SIZE = TSearchEngine.SEGMENT_SIZE
 REDUCERS_COUNT = 100
 REDUCERS_FILES_BUFFER = 1000000 #1MB
-
-def build_index_map(books_dir, intermid_results_dir, indices_dir, log_out):
+""" dir = either path to csv or to folder with books """
+def build_index_map(dir, intermid_results_dir, indices_dir, log_out):
+    books_dir = ""
+    csv_dir = ""
+    if os.path.isfile(dir):
+        csv_dir = dir
+    else:
+        books_dir = dir
+    
+    
     #clear intermid_results_dir
     for fname in os.listdir(intermid_results_dir):
         fname = os.path.join(intermid_results_dir, fname)
@@ -57,7 +65,8 @@ def build_index_map(books_dir, intermid_results_dir, indices_dir, log_out):
     crawler = TCrawler(verbosity=0)
     segment_index_writer = TSegmentIndexWriter(indices_dir)
     books_counter = TCustomCounter("ParsedBooks", log_out, verbosity=1, interval=100)
-    for book_obj in crawler.crawl_folder(books_dir):
+    
+    def process_book(book_obj):
         obj_id = book_obj.object_id
         for field in book_obj.object_fields:
             field_id = field.field_id
@@ -83,6 +92,14 @@ def build_index_map(books_dir, intermid_results_dir, indices_dir, log_out):
                     code = match2code(segment_id, segment_match_index, word_case_weight)
                     to_word_index(segment_token,  code)
         books_counter.add()
+        
+    if books_dir:
+        for book_obj in crawler.crawl_folder(books_dir):
+            process_book(book_obj)
+    elif csv_dir:
+        for book_obj in crawler.crawl_csv(csv_dir):
+            process_book(book_obj)        
+    
     flush_buffer()
     for reducer in reducers_pool:
         reducer.close()

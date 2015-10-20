@@ -2,25 +2,43 @@
 import BaseHTTPServer
 import sys
 import socket
+from lib.crawler import TCrawler
 
 class TSearchServer():
-    def __init__(self, books_folder, index_folder):
+    def __init__(self, books_folder, pages_index_folder, csv_path, cfields_index_folder):
         self.books_folder = books_folder
-        self.index_folder = index_folder
+        self.pages_index_folder = pages_index_folder
+        self.csv_path = csv_path
+        self.cfields_index_folder = cfields_index_folder
         from lib.search_engine import TSearchEngine
-        self.search_engine = TSearchEngine(index_location=self.index_folder)
+        self.pages_search_engine = TSearchEngine(index_location=self.pages_index_folder)
+        self.cfields_search_engine = TSearchEngine(index_location=self.cfields_index_folder)
+        self.upload_csv_data_(self.csv_path)
     
-    def get_segment_data(self, segment_id):
-        obj_id, field_id, start, length = self.search_engine.segment_index.get_segment(segment_id)
+    def upload_csv_data_(self, csv_path):
+        crawler = TCrawler()
+        self.object_cfields = {}
+        for book in crawler.crawl_csv(csv_path):
+            self.object_cfields[book.object_id] = {}
+            for field in book.object_fields:
+                self.object_cfields[book.object_id][field.field_id] = field.field_value
+    
+    def get_pages_segment_data(self, segment_id):
+        obj_id, field_id, start, length = self.pages_search_engine.segment_index.get_segment(segment_id)
         import os
         location = os.path.join(self.books_folder, obj_id, field_id)
         f = open(location, "rb")
         f.seek(start)
         snippet = f.read(length)
         return obj_id, field_id, snippet
+
+    def get_cfields_segment_data(self, segment_id):
+        obj_id, field_id, start, length = self.cfields_search_engine.segment_index.get_segment(segment_id)
+        snippet = self.object_cfields[obj_id][field_id]
+        return obj_id, field_id, snippet
     
     def select_words_in_snippet(self, words2select, snippet):
-        matches = self.search_engine.parsers.parse_buffer(snippet, "windows-1251")
+        matches = self.pages_search_engine.parsers.parse_buffer(snippet, "windows-1251")
         to_select = []
         for token, position in words2select:
             to_select += [(matches[position].start, matches[position].start + matches[position].length)]
@@ -34,7 +52,9 @@ class TSearchServer():
         return snippet     
     
     def search(self, query, query_tokens=[]):
-        return self.search_engine.search(query=query, query_tokens=query_tokens)
+        return [self.cfields_search_engine.search(query=query, query_tokens=query_tokens),
+                self.pages_search_engine.search(query=query, query_tokens=query_tokens),]
+                
 
 
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
@@ -42,15 +62,23 @@ MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
 
 port = int(sys.argv[1])
 books_folder = sys.argv[2]
-index_folder = sys.argv[3]
+pages_index_folder = sys.argv[3]
+csv_path = sys.argv[4]
+cfields_index_folder = sys.argv[5]
+
 """
 port = 8334
 books_folder = "/home/arslan/src/ngpedia/books1000"
-index_folder ="indices/"
+pages_index_folder ="indices/"
+csv_path = "/home/arslan/src/ngpedia/search_system/books.csv"
+cfields_index_folder = "/home/arslan/src/ngpedia/search_system/custom_fields_indices/"
 """
 
+
 server = TSearchServer(books_folder=books_folder, 
-                       index_folder=index_folder)
+                       pages_index_folder=pages_index_folder, 
+                       csv_path=csv_path, 
+                       cfields_index_folder=cfields_index_folder)
 
 form_html = """
 <html>
@@ -89,7 +117,13 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         return_json = query.has_key("json")   
         import datetime
         if query_text:
-            match_objects, timings = server.search(query_text)
+            custom_fields_matches, pages_matches = server.search(query_text)
+            timings = pages_matches[-1]
+            custom_fields_matches, pages_matches = custom_fields_matches[0], pages_matches[0]
+            joined = [(match.result_weight, 1, match)  for match in custom_fields_matches]
+            joined += [(match.result_weight, 0, match)  for match in pages_matches]
+            joined.sort(reverse=True)
+            match_objects = [(match_type, match) for _, match_type, match in joined]
         else:
             match_objects, timings = [], (0,0,0,0) 
         response_object = {}
@@ -99,8 +133,11 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         for res_index in xrange(start, start + length):
             if res_index >= len(match_objects):
                 break
-            result = match_objects[res_index]
-            obj_id, field_id, snippet_encoded = server.get_segment_data(result.segment_id)
+            is_custom_field, result = match_objects[res_index]
+            if not is_custom_field:
+                obj_id, field_id, snippet_encoded = server.get_pages_segment_data(result.segment_id)
+            else:
+                obj_id, field_id, snippet_encoded = server.get_cfields_segment_data(result.segment_id)
             snippet = server.select_words_in_snippet(result.words2select, snippet_encoded)
             response_elem = {"index:": res_index, 
                              "obj_id": obj_id, 
