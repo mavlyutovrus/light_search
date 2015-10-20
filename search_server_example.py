@@ -120,7 +120,8 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             custom_fields_matches, pages_matches = server.search(query_text)
             timings = pages_matches[-1]
             custom_fields_matches, pages_matches = custom_fields_matches[0], pages_matches[0]
-            joined = [(match.result_weight, 1, match)  for match in custom_fields_matches]
+            #small hack to allow custom fields with same words count be on top
+            joined = [((match.result_weight[0]* 1.1, match.result_weight[1]), 1, match)  for match in custom_fields_matches]
             joined += [(match.result_weight, 0, match)  for match in pages_matches]
             joined.sort(reverse=True)
             match_objects = [(match_type, match) for _, match_type, match in joined]
@@ -142,7 +143,8 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             response_elem = {"index:": res_index, 
                              "obj_id": obj_id, 
                              "field_id": field_id, 
-                             "snippet": snippet}
+                             "snippet": snippet, 
+                             "weight": result.result_weight}
             response_elems.append(response_elem)
         response_object["results"] = response_elems
         import json
