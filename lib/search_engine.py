@@ -19,7 +19,7 @@ class TSearchEngine(object):
     SEGMENT_SIZE = 32 # words
     MAX_QUERY_SIZE = 5
     CRUDE_FILTER_TRIM_PROPORTION = 0.1
-    CRUDE_FILTER_MAX_SELECT = 10000
+    CRUDE_FILTER_MAX_SELECT = 5000
     STAT_FILTER_CONTEXT = 2
     
     def __init__(self, index_location="./"):
@@ -196,26 +196,22 @@ class TSearchEngine(object):
             query_matches = self.parsers.parse_buffer(query)
             query_tokens = [match.token for match in query_matches]
         
-        #import datetime
-        #s = datetime.datetime.now()
+        import datetime
+        start = datetime.datetime.now()
         query_tokens = self.trim_query_tokens(query_tokens)
         tokens_occurences = {token: self.word_index.get_occurences(token) for token in set(query_tokens)}
         local_token2idf = {token:self.freq2idf(tokens_occurences[token][-1])  for token in query_tokens}
-        #print "timedelta parse query", datetime.datetime.now() - s
+        time_prepare = int((datetime.datetime.now() - start).total_seconds() * 1000)
         
-        #s = datetime.datetime.now()
-        
-        #print "timedelta get occurences", datetime.datetime.now() - s
-        
-        #s = datetime.datetime.now()
+        start = datetime.datetime.now()
         by_segment = self.get_initial_matches(tokens_occurences, local_token2idf)
-        #print "timedelta init matches", datetime.datetime.now() - s
+        time_initial_matches = int((datetime.datetime.now() - start).total_seconds() * 1000)
         
-        #s = datetime.datetime.now()
+        start = datetime.datetime.now()
         self.add_matches_from_stat_filter(by_segment, tokens_occurences)
-        #print "stat filter timedelta", datetime.datetime.now() - s
+        time_stat_filter = int((datetime.datetime.now() - start ).total_seconds() * 1000)
         
-        #s = datetime.datetime.now()
+        start = datetime.datetime.now()
         results_with_weights = []
         for segment_id, positions in by_segment.items():
             span_word_matches = self.shortest_span(positions)
@@ -225,10 +221,10 @@ class TSearchEngine(object):
                                     for position_word_case in token_positions \
                                         if position_word_case[0] >= span_start and position_word_case[0] <= span_end]
             results_with_weights += [(match_weight, TSearchEngineResult(segment_id, match_weight, words2select))]
-        #print "weights timedelta", datetime.datetime.now() - s
-        
         results_with_weights.sort(reverse=True)
         results = [result for _, result in results_with_weights]
-        return results
+        time_assing_weights = int((datetime.datetime.now() - start).total_seconds() * 1000)
+        
+        return results, (time_prepare, time_initial_matches, time_stat_filter, time_assing_weights)
 
         
