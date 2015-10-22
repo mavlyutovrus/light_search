@@ -59,20 +59,19 @@ class TSearchServer():
 
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
 
-
+"""
 port = int(sys.argv[1])
 books_folder = sys.argv[2]
 pages_index_folder = sys.argv[3]
 csv_path = sys.argv[4]
 cfields_index_folder = sys.argv[5]
-
 """
 port = 8334
 books_folder = "/home/arslan/src/ngpedia/books1000"
 pages_index_folder ="indices/"
 csv_path = "/home/arslan/src/ngpedia/search_system/books.csv"
 cfields_index_folder = "/home/arslan/src/ngpedia/search_system/custom_fields_indices/"
-"""
+
 
 
 server = TSearchServer(books_folder=books_folder, 
@@ -121,7 +120,8 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             timings = pages_matches[-1]
             custom_fields_matches, pages_matches = custom_fields_matches[0], pages_matches[0]
             #small hack to allow custom fields with same words count be on top
-            joined = [((match.result_weight[0]* 1.1, match.result_weight[1]), 1, match)  for match in custom_fields_matches]
+            joined = [((match.result_weight[0]* 1.1, match.result_weight[1], match.result_weight[2]), 1, match) \
+                                                 for match in custom_fields_matches]
             joined += [(match.result_weight, 0, match)  for match in pages_matches]
             joined.sort(reverse=True)
             match_objects = [(match_type, match) for _, match_type, match in joined]

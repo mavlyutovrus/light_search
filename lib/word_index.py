@@ -32,17 +32,31 @@ class TWordIndexReader(object):
             del self.cache_key2time[key2del]
             del self.cache[key2del]
     
-    def get_occurences(self, token):
-        if not token in self.keys_db:
-            return [], None, 0
+    def get_key_data(self, token):
         if token in self.cache:
-            self.update_cache(token)
-            return self.cache[token]
-        word_freq, offset, bloom_filter_dump_size = self.keys_db[token]
+            word_freq, offset, bloom_filter_dump_size = self.cache[token][-3:]
+        elif token in self.keys_db:
+            word_freq, offset, bloom_filter_dump_size = self.keys_db[token]
+        else:
+            word_freq, offset, bloom_filter_dump_size = None, None, None
+        return word_freq, offset, bloom_filter_dump_size
+    
+    def get_values_by_key_data(self, token, word_freq, offset, bloom_filter_dump_size):
+        if word_freq == None:
+            return [], None, 0
         self.values_file.seek(offset)
         codes = pickle.load(self.values_file)
         prob_filter = None
         if bloom_filter_dump_size:
             prob_filter = BloomFilter.fromfile(self.values_file, bloom_filter_dump_size)
-        self.update_cache(token, (codes, prob_filter, word_freq))
-        return codes, prob_filter, word_freq
+        self.update_cache(token, (codes, prob_filter, word_freq, offset, bloom_filter_dump_size))
+        return codes, prob_filter, word_freq        
+    
+    def get_occurences(self, token):
+        if not token in self.cache and not token in self.keys_db:
+            return [], None, 0
+        if token in self.cache:
+            self.update_cache(token)
+            return self.cache[token][:3]
+        word_freq, offset, bloom_filter_dump_size = self.keys_db[token]
+        return self.get_values_by_key_data(token, word_freq, offset, bloom_filter_dump_size)

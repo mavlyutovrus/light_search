@@ -76,6 +76,7 @@ class TSearchEngine(object):
         return position_token_pairs[first:last + 1]
 
     def freq2idf(self, token_freq):
+        token_freq = token_freq and token_freq or 0
         return 1.0 / (float(token_freq) + 1.0)
         
     def get_order_weight(self, query_tokens, span_word_matches):
@@ -98,13 +99,16 @@ class TSearchEngine(object):
         return norm_order_weight        
     
     def calc_full_match_weight(self, span_word_matches, query_tokens, token2idf):
-        match_weight = sum(token2idf[token] + position_and_case_weight[1] \
+        max_case_weight = max(position_and_case_weight[1] \
+                           for position_and_case_weight, _ in span_word_matches) 
+        match_weight = sum(token2idf[token] \
                            for position_and_case_weight, token in span_word_matches)
         query_weight = sum(token2idf[token] for token in query_tokens)
         norm_match_weight = float(match_weight) / (query_weight + 1.0)
         norm_order_weight =  self.get_order_weight(query_tokens, span_word_matches)
         span_len = span_word_matches[-1][0][0] - span_word_matches[0][0][0] + 1.0
         weight = norm_match_weight * norm_order_weight / span_len
+        weight *= max_case_weight > 0 and 1.1 or 1.0
         matched_words_count = len(set(token for _, token in span_word_matches))
         return (matched_words_count, weight)
     
@@ -175,15 +179,13 @@ class TSearchEngine(object):
         return by_segment 
     
     
-    def trim_query_tokens(self, query_tokens):
+    def trim_query_tokens(self, query_tokens, token2freq):
         if len(query_tokens) <= TSearchEngine.MAX_QUERY_SIZE:
             return query_tokens
-        with_freqs = [(token in self.word_index.keys_db and self.word_index.keys_db[token][0] or 0, token)\
-                                                               for token in query_tokens]
-        only_freqs = [freq for freq, _ in with_freqs]
-        only_freqs.sort()
-        max_freq = only_freqs[TSearchEngine.MAX_QUERY_SIZE - 1]
-        trimmed_query_tokens = [token for freq, token in with_freqs if freq <= max_freq]
+        freqs = [token2freq[token] for token in query_tokens]
+        freqs.sort()
+        max_allowed_freq = freqs[TSearchEngine.MAX_QUERY_SIZE - 1]
+        trimmed_query_tokens = [token for token in query_tokens if token2freq[token] <= max_allowed_freq]
         #for the case of equal freqs in the tail
         trimmed_query_tokens = trimmed_query_tokens[:TSearchEngine.MAX_QUERY_SIZE]
         return trimmed_query_tokens
@@ -198,10 +200,20 @@ class TSearchEngine(object):
         
         import datetime
         start = datetime.datetime.now()
-        query_tokens = self.trim_query_tokens(query_tokens)
-        tokens_occurences = {token: self.word_index.get_occurences(token) for token in set(query_tokens)}
-        local_token2idf = {token:self.freq2idf(tokens_occurences[token][-1])  for token in query_tokens}
-        time_prepare = int((datetime.datetime.now() - start).total_seconds() * 1000)
+        if len(query_tokens) > TSearchEngine.MAX_QUERY_SIZE * 2:
+            query_tokens = query_tokens[:TSearchEngine.MAX_QUERY_SIZE]
+        tokens_key_data = {token:self.word_index.get_key_data(token) for token in set(query_tokens)}
+        token2freq = {token:tokens_key_data[token][0]  for token in tokens_key_data.keys()}
+        local_token2idf = {token:self.freq2idf(freq) for token, freq in token2freq.items()}
+        query_tokens = self.trim_query_tokens(query_tokens, token2freq)
+        #to speed-up load
+        token_by_value_offset = [(tokens_key_data[token][1], token) for token in query_tokens]
+        token_by_value_offset.sort()
+        tokens_occurences = {}
+        for _, token in token_by_value_offset:
+            word_freq, offset, bloom_filter_dump_size = tokens_key_data[token]
+            tokens_occurences[token] = self.word_index.get_values_by_key_data(token, word_freq, offset, bloom_filter_dump_size)
+        time_upload_words_occurences = int((datetime.datetime.now() - start).total_seconds() * 1000)
         
         start = datetime.datetime.now()
         by_segment = self.get_initial_matches(tokens_occurences, local_token2idf)
@@ -216,15 +228,16 @@ class TSearchEngine(object):
         for segment_id, positions in by_segment.items():
             span_word_matches = self.shortest_span(positions)
             match_weight = self.calc_full_match_weight(span_word_matches, query_tokens, local_token2idf)
+            #to have stable order in case if weights will be the same
+            match_weight = (match_weight[0], match_weight[1], -segment_id)
             span_start, span_end = span_word_matches[0][0][0], span_word_matches[-1][0][0]
             words2select = [(token, position_word_case[0]) for token, token_positions in positions.items() \
                                     for position_word_case in token_positions \
                                         if position_word_case[0] >= span_start and position_word_case[0] <= span_end]
-            results_with_weights += [(match_weight, -segment_id, TSearchEngineResult(segment_id, match_weight, words2select))]
+            results_with_weights += [(match_weight, TSearchEngineResult(segment_id, match_weight, words2select))]
         results_with_weights.sort(reverse=True)
-        results = [result for _, _, result in results_with_weights]
-        time_assing_weights = int((datetime.datetime.now() - start).total_seconds() * 1000)
-        
-        return results, (time_prepare, time_initial_matches, time_stat_filter, time_assing_weights)
+        results = [result for _, result in results_with_weights]
+        time_assign_weights = int((datetime.datetime.now() - start).total_seconds() * 1000)
+        return results, (time_upload_words_occurences, time_initial_matches, time_stat_filter, time_assign_weights)
 
         
