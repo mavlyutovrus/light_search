@@ -174,7 +174,8 @@ class TSearchEngine(object):
                 sum_values = sum_values + sub_mat
                 #sum_values += sub_mat - not implemented on some platforms
         """ segments with weight > 0 """
-        segment_ids, _, segment_weights = find(sum_values)        
+        sum_values = sum_values.tocoo() 
+        segment_ids, segment_weights = sum_values.row, sum_values.data
         """ top CRUDE_FILTER_MAX_SELECT segments"""
         order_by_weight = segment_weights.argsort()
         min_row = max(order_by_weight.shape[0] - TSearchEngine.CRUDE_FILTER_MAX_SELECT, 0)
