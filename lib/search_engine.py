@@ -191,12 +191,15 @@ class TSearchEngine(object):
             new_start_position = numpy.argmax(selected_segments_weights >= min_allowed)
             selected_segments = selected_segments[new_start_position:]
             selected_segments_weights = selected_segments_weights[new_start_position:]
-        selected_segments = set(selected_segments)
+        selected_segments_dict = set(selected_segments)
+        @numpy.vectorize
+        def get_indices_of_selected(elmt): return elmt in selected_segments_dict
         """ selected segments matches """            
         by_segment = {}
         for token, codes in tokens_occurrences.items():
             segments = tokens_segments[token]
-            selected_codes  = codes[numpy.in1d(segments, selected_segments)]
+            #much faster than in1d
+            selected_codes = codes[get_indices_of_selected(segments)]
             for code in selected_codes:
                 segment_id, position, match_case = self.code2match(code)
                 by_segment.setdefault(segment_id, {})
