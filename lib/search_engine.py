@@ -7,6 +7,9 @@ from word_index import TWordIndexReader
 import pickle
 import os
 import sys
+import numpy
+
+
         
 class TSearchEngineResult(object):
     def __init__(self, segment_id, result_weight, words2select):
@@ -26,6 +29,7 @@ class TSearchEngine(object):
         self.parsers = TParsersBundle()
         self.word_index = TWordIndexReader(index_location)
         self.segment_index = TSegmentIndexReader(index_location)
+        self.buffer_ = numpy.zeros((TSearchEngine.MAX_QUERY_SIZE * TSearchEngine.MAX_WORD_FREQ * 2, 2))
     
     def match2code(self, segment_id, position, match_weight=0):
         """ position < SEGMENT_SIZE """
@@ -143,39 +147,49 @@ class TSearchEngine(object):
     def get_initial_matches(self, tokens_occurrences, token2idf):
         #TODO: currently not able to properly search queries with duplicated words
         """token_occurences = (first 100K occurrences, bloom filter for the other occurrences)"""
-        by_idf = [(token2idf[token], token, token_occurrences[0]) \
-                                    for token, token_occurrences in tokens_occurrences.items()]
-        by_idf.sort(reverse=True) #max weight first
-        max_possible_gain = sum(token_weight for token_weight, _, _ in by_idf)
-        add_segments = True
-        by_segment_crude_weight = {}
-        max_weight = 0.0
-        for token_weight, token, codes in by_idf:
-            prev_segment_id = -1
-            for code in codes:
-                segment_id = self.code2segment_id(code)
-                if segment_id != prev_segment_id:
-                    if add_segments or segment_id in by_segment_crude_weight:
-                        by_segment_crude_weight.setdefault(segment_id, 0.0)
-                        by_segment_crude_weight[segment_id] += token_weight
-                        max_weight = max(max_weight, by_segment_crude_weight[segment_id])
-                    prev_segment_id = segment_id
-            max_possible_gain -= token_weight
-            if by_segment_crude_weight and max_possible_gain < TSearchEngine.CRUDE_FILTER_TRIM_PROPORTION * max_weight or\
-                    max_possible_gain < token_weight and len(by_segment_crude_weight) >= TSearchEngine.CRUDE_FILTER_MAX_SELECT:
-                add_segments = False
-        by_segment_crude_weight = [(weight, segment_id) for segment_id, weight in by_segment_crude_weight.items() \
-                                                if max_weight * TSearchEngine.CRUDE_FILTER_TRIM_PROPORTION < weight]
-        by_segment_crude_weight.sort(reverse=True)
+        tokens_occurrences = {token:codes_and_bloomfilter[0] \
+                            for token, codes_and_bloomfilter in tokens_occurrences.items()}   
+        tokens_occurrences = {token:codes for token, codes in tokens_occurrences.items() 
+                                                    if codes.shape[0] > 0}        
+        if not tokens_occurrences:
+            return {}
+        tokens_segments = {token:codes / (4 * TSearchEngine.SEGMENT_SIZE) \
+                            for token, codes in tokens_occurrences.items()}
+        """ get max segment_id == column_size """
+        column_size = 0
+        for segments in tokens_segments.values():
+            if segments.shape[0]:
+                column_size = max(column_size, numpy.amax(segments)  + 1)   
+        """ get total weight of each segment """     
+        from scipy.sparse import coo_matrix, find
+        sum_values = None
+        column_indices = numpy.zeros(1) #(always zeros)
+        for token, segments in tokens_segments.items():
+            column_indices.resize(segments.shape[0])
+            weight = token2idf[token]
+            values = numpy.repeat([weight], segments.shape[0])
+            sub_mat = coo_matrix( (values, (segments, column_indices)  ), shape=(column_size, 1))
+            sub_mat = sub_mat.tocsc()
+            if sum_values == None:
+                sum_values = sub_mat
+            else:
+                sum_values += sub_mat
+        """ segments with weight > 0 """
+        segment_ids, _, segment_weights = find(sum_values)        
+        """ top CRUDE_FILTER_MAX_SELECT segments"""
+        segments_by_weight = segment_ids[segment_weights.argsort()]
+        min_row = max(segments_by_weight.shape[0] - TSearchEngine.CRUDE_FILTER_MAX_SELECT, 0)
+        selected_segments = segments_by_weight[min_row:]
+        
+        """ selected segments matches """            
         by_segment = {}
-        for _, segment_id in by_segment_crude_weight[:TSearchEngine.CRUDE_FILTER_MAX_SELECT]:
-            by_segment[segment_id] = {}        
-        for _, token, codes in by_idf:
-            for code in codes:
-                segment_id = self.code2segment_id(code)
-                if segment_id in by_segment:
-                    segment_id, position, match_case = self.code2match(code)
-                    by_segment[segment_id].setdefault(token, []).append((position, match_case))
+        for token, codes in tokens_occurrences.items():
+            segments = tokens_segments[token]
+            selected_codes  = codes[numpy.in1d(segments, selected_segments)]
+            for code in selected_codes:
+                segment_id, position, match_case = self.code2match(code)
+                by_segment.setdefault(segment_id, {})
+                by_segment[segment_id].setdefault(token, []).append((position, match_case))
         return by_segment 
     
     
@@ -229,7 +243,7 @@ class TSearchEngine(object):
             span_word_matches = self.shortest_span(positions)
             match_weight = self.calc_full_match_weight(span_word_matches, query_tokens, local_token2idf)
             #to have stable order in case if weights will be the same
-            match_weight = (match_weight[0], match_weight[1], -segment_id)
+            match_weight = (match_weight[0], match_weight[1], -float(segment_id))
             span_start, span_end = span_word_matches[0][0][0], span_word_matches[-1][0][0]
             words2select = [(token, position_word_case[0]) for token, token_positions in positions.items() \
                                     for position_word_case in token_positions \

@@ -2,6 +2,7 @@ import os
 import sys
 import shelve
 import pickle
+import numpy
 from pybloom import BloomFilter
 
 
@@ -43,9 +44,10 @@ class TWordIndexReader(object):
     
     def get_values_by_key_data(self, token, word_freq, offset, bloom_filter_dump_size):
         if word_freq == None:
-            return [], None, 0
+            return numpy.zeros(0), None, 0
         self.values_file.seek(offset)
         codes = pickle.load(self.values_file)
+        codes = numpy.array(codes, dtype=numpy.int64)
         prob_filter = None
         if bloom_filter_dump_size:
             prob_filter = BloomFilter.fromfile(self.values_file, bloom_filter_dump_size)
@@ -54,7 +56,7 @@ class TWordIndexReader(object):
     
     def get_occurences(self, token):
         if not token in self.cache and not token in self.keys_db:
-            return [], None, 0
+            return numpy.zeros(0), None, 0
         if token in self.cache:
             self.update_cache(token)
             return self.cache[token][:3]

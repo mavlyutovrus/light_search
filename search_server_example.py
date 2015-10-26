@@ -59,7 +59,7 @@ class TSearchServer():
 
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
 
-"""
+
 port = int(sys.argv[1])
 books_folder = sys.argv[2]
 pages_index_folder = sys.argv[3]
@@ -71,13 +71,18 @@ books_folder = "/home/arslan/src/ngpedia/books1000"
 pages_index_folder ="indices/"
 csv_path = "/home/arslan/src/ngpedia/search_system/books.csv"
 cfields_index_folder = "/home/arslan/src/ngpedia/search_system/custom_fields_indices/"
-
-
+"""
 
 server = TSearchServer(books_folder=books_folder, 
                        pages_index_folder=pages_index_folder, 
                        csv_path=csv_path, 
                        cfields_index_folder=cfields_index_folder)
+
+"""
+custom_fields_matches, pages_matches = server.search(u"или по также или не")
+print pages_matches[1]
+exit()
+"""
 
 form_html = """
 <html>
