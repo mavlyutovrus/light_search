@@ -22,7 +22,7 @@ class TSearchEngine(object):
     MAX_WORD_FREQ = 500000
     SEGMENT_SIZE = 64 # words
     MAX_QUERY_SIZE = 5
-    CRUDE_FILTER_TRIM_PROPORTION = 0.1
+    CRUDE_FILTER_TRIM_PROPORTION = 0.5
     CRUDE_FILTER_MAX_SELECT = 2000
     STAT_FILTER_CONTEXT = 2
     
@@ -81,7 +81,8 @@ class TSearchEngine(object):
 
     def freq2idf(self, token_freq):
         token_freq = token_freq and token_freq or 0
-        return 1.0 / (float(token_freq) + 1.0)
+        import math
+        return 1.0 / math.log(float(token_freq) + 2.0)
         
     def get_order_weight(self, query_tokens, span_word_matches):
         query_pairs = {}
@@ -108,7 +109,7 @@ class TSearchEngine(object):
         match_weight = sum(token2idf[token] \
                            for position_and_case_weight, token in span_word_matches)
         query_weight = sum(token2idf[token] for token in query_tokens)
-        norm_match_weight = float(match_weight) / (query_weight + 1.0)
+        norm_match_weight = (float(match_weight) +  0.0000001) / (query_weight + 0.0000001)
         norm_order_weight =  self.get_order_weight(query_tokens, span_word_matches)
         span_len = span_word_matches[-1][0][0] - span_word_matches[0][0][0] + 1.0
         weight = norm_match_weight * norm_order_weight / span_len
@@ -154,7 +155,7 @@ class TSearchEngine(object):
         if not tokens_occurrences:
             return {}
         tokens_segments = {token:codes / (4 * TSearchEngine.SEGMENT_SIZE) \
-                            for token, codes in tokens_occurrences.items()}
+                            for token, codes in tokens_occurrences.items()}        
         """ get max segment_id == column_size """
         column_size = 0
         for segments in tokens_segments.values():
@@ -164,10 +165,12 @@ class TSearchEngine(object):
         sum_values = None
         column_indices = numpy.zeros(1) #(always zeros)
         for token, segments in tokens_segments.items():
-            column_indices.resize(segments.shape[0])
+            #important for clear ranking + surprisingly makes the process faster
+            unique_segments = numpy.unique(segments)
+            column_indices.resize(unique_segments.shape[0])
             weight = token2idf[token]
-            values = numpy.repeat([weight], segments.shape[0])
-            sub_mat = coo_matrix( (values, (segments, column_indices)  ), shape=(column_size, 1))
+            values = numpy.repeat([weight], unique_segments.shape[0])
+            sub_mat = coo_matrix( (values, (unique_segments, column_indices)  ), shape=(column_size, 1))
             sub_mat = sub_mat.tocsc()
             if sum_values == None:
                 sum_values = sub_mat
@@ -192,6 +195,7 @@ class TSearchEngine(object):
             selected_segments = selected_segments[new_start_position:]
             selected_segments_weights = selected_segments_weights[new_start_position:]
         selected_segments_dict = set(selected_segments)
+        
         @numpy.vectorize
         def get_indices_of_selected(elmt): return elmt in selected_segments_dict
         """ selected segments matches """            
