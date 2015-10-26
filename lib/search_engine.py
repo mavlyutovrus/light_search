@@ -21,7 +21,7 @@ class TSearchEngine(object):
     MAX_WORD_FREQ = 100000
     SEGMENT_SIZE = 32 # words
     MAX_QUERY_SIZE = 5
-    CRUDE_FILTER_TRIM_PROPORTION = 0.1
+    CRUDE_FILTER_TRIM_PROPORTION = 0.5
     CRUDE_FILTER_MAX_SELECT = 1000
     STAT_FILTER_CONTEXT = 2
     
@@ -176,9 +176,19 @@ class TSearchEngine(object):
         """ segments with weight > 0 """
         segment_ids, _, segment_weights = find(sum_values)        
         """ top CRUDE_FILTER_MAX_SELECT segments"""
-        segments_by_weight = segment_ids[segment_weights.argsort()]
-        min_row = max(segments_by_weight.shape[0] - TSearchEngine.CRUDE_FILTER_MAX_SELECT, 0)
-        selected_segments = segments_by_weight[min_row:]
+        order_by_weight = segment_weights.argsort()
+        min_row = max(order_by_weight.shape[0] - TSearchEngine.CRUDE_FILTER_MAX_SELECT, 0)
+        top_weight_indices = order_by_weight[min_row:]
+        selected_segments = segment_ids[top_weight_indices]
+        selected_segments_weights = segment_weights[top_weight_indices]
+        """ remove segments with small weight comparing to the one with the maximum weight"""
+        max_weight = selected_segments_weights[selected_segments_weights.shape[0] - 1]
+        min_weight = selected_segments_weights[0]
+        min_allowed = max_weight * TSearchEngine.CRUDE_FILTER_TRIM_PROPORTION
+        if min_allowed > min_weight:
+            new_start_position = numpy.argmax(selected_segments_weights >= min_allowed)
+            selected_segments = selected_segments[new_start_position:]
+            selected_segments_weights = selected_segments_weights[new_start_position:]
         
         """ selected segments matches """            
         by_segment = {}
