@@ -22,14 +22,13 @@ class TSearchEngine(object):
     SEGMENT_SIZE = 32 # words
     MAX_QUERY_SIZE = 5
     CRUDE_FILTER_TRIM_PROPORTION = 0.1
-    CRUDE_FILTER_MAX_SELECT = 5000
+    CRUDE_FILTER_MAX_SELECT = 1000
     STAT_FILTER_CONTEXT = 2
     
     def __init__(self, index_location="./"):
         self.parsers = TParsersBundle()
         self.word_index = TWordIndexReader(index_location)
         self.segment_index = TSegmentIndexReader(index_location)
-        self.buffer_ = numpy.zeros((TSearchEngine.MAX_QUERY_SIZE * TSearchEngine.MAX_WORD_FREQ * 2, 2))
     
     def match2code(self, segment_id, position, match_weight=0):
         """ position < SEGMENT_SIZE """
@@ -158,8 +157,7 @@ class TSearchEngine(object):
         """ get max segment_id == column_size """
         column_size = 0
         for segments in tokens_segments.values():
-            if segments.shape[0]:
-                column_size = max(column_size, numpy.amax(segments)  + 1)   
+            column_size = max(column_size, numpy.amax(segments) + 1)   
         """ get total weight of each segment """     
         from scipy.sparse import coo_matrix, find
         sum_values = None

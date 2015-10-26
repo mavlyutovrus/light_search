@@ -45,6 +45,9 @@ class TWordIndexReader(object):
     def get_values_by_key_data(self, token, word_freq, offset, bloom_filter_dump_size):
         if word_freq == None:
             return numpy.zeros(0), None, 0
+        if token in self.cache:
+            self.update_cache(token)
+            return self.cache[token][:3]       
         self.values_file.seek(offset)
         codes = pickle.load(self.values_file)
         codes = numpy.array(codes, dtype=numpy.int64)
