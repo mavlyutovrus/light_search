@@ -118,7 +118,7 @@ class TSearchEngine(object):
         return (matched_words_count, weight)
     
     def add_matches_from_stat_filter(self, by_segment, tokens_occurrences):
-        """token_occurence = (first 100K occurrences, bloom filter for the other occurrences)"""
+        """token_occurence = (first ~MAX_WORD_FREQ occurrences, bloom filter for the other occurrences)"""
         hypos = [token for token, token_occurrences in tokens_occurrences.items() \
                                                     if token_occurrences[1]]
         hypos = set(hypos)
