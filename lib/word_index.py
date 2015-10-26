@@ -50,7 +50,6 @@ class TWordIndexReader(object):
             return self.cache[token][:3]       
         self.values_file.seek(offset)
         codes = pickle.load(self.values_file)
-        codes = numpy.array(codes, dtype=numpy.int64)
         prob_filter = None
         if bloom_filter_dump_size:
             prob_filter = BloomFilter.fromfile(self.values_file, bloom_filter_dump_size)

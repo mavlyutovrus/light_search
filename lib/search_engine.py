@@ -18,11 +18,12 @@ class TSearchEngineResult(object):
         self.words2select = words2select
 
 class TSearchEngine(object):
-    MAX_WORD_FREQ = 100000
-    SEGMENT_SIZE = 32 # words
+    #maximum amount to store in index, the rest is in the bloomfilter
+    MAX_WORD_FREQ = 500000
+    SEGMENT_SIZE = 64 # words
     MAX_QUERY_SIZE = 5
-    CRUDE_FILTER_TRIM_PROPORTION = 0.5
-    CRUDE_FILTER_MAX_SELECT = 1000
+    CRUDE_FILTER_TRIM_PROPORTION = 0.1
+    CRUDE_FILTER_MAX_SELECT = 2000
     STAT_FILTER_CONTEXT = 2
     
     def __init__(self, index_location="./"):
@@ -190,7 +191,7 @@ class TSearchEngine(object):
             new_start_position = numpy.argmax(selected_segments_weights >= min_allowed)
             selected_segments = selected_segments[new_start_position:]
             selected_segments_weights = selected_segments_weights[new_start_position:]
-        
+        selected_segments = set(selected_segments)
         """ selected segments matches """            
         by_segment = {}
         for token, codes in tokens_occurrences.items():

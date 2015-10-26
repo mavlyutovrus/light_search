@@ -3,6 +3,7 @@ from lib.search_engine import TSearchEngine
 from utils import TCustomCounter
 from pybloom.pybloom import BloomFilter
 import pickle
+import numpy
 import shelve
 import os
 import sys
@@ -52,7 +53,7 @@ def prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid=""):
                     prob_filter.add(code)
             all_codes[chunk_index] = []
         start_position = values_out.tell()
-        pickle.dump(codes2index, values_out)
+        pickle.dump(numpy.array(codes2index, dtype=numpy.int64), values_out)
         prob_filter_start_position = values_out.tell()
         if prob_filter:
             prob_filter.tofile(values_out)
