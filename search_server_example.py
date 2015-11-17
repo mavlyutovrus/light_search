@@ -170,7 +170,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         response_object["results"] = response_elems
         import json
         callback_name = query.has_key("callback") and query["callback"][0] or ""
-        response_str = json.dumps(response_object, ensure_ascii=False, indent=1)
+        response_str = json.dumps(response_object, ensure_ascii=False, indent=(not return_json and 1 or None))
         if callback_name:
             response_str = callback_name + "(" + response_str + "}"      
         if not return_json:
