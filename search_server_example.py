@@ -4,6 +4,7 @@ import sys
 import socket
 from lib.crawler import TCrawler
 
+
 class TSearchServer():
     def __init__(self, books_folder, pages_index_folder, csv_path, cfields_index_folder):
         self.books_folder = books_folder
@@ -13,6 +14,7 @@ class TSearchServer():
         from lib.search_engine import TSearchEngine
         self.pages_search_engine = TSearchEngine(index_location=self.pages_index_folder)
         self.cfields_search_engine = TSearchEngine(index_location=self.cfields_index_folder)
+        self.object_cfields = {}
         self.upload_csv_data_(self.csv_path)
     
     def upload_csv_data_(self, csv_path):
@@ -60,6 +62,7 @@ class TSearchServer():
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
 
 
+
 port = int(sys.argv[1])
 books_folder = sys.argv[2]
 pages_index_folder = sys.argv[3]
@@ -72,6 +75,8 @@ pages_index_folder ="indices/"
 csv_path = "/home/arslan/src/ngpedia/search_system/books.csv"
 cfields_index_folder = "/home/arslan/src/ngpedia/search_system/custom_fields_indices/"
 """
+
+
 
 server = TSearchServer(books_folder=books_folder, 
                        pages_index_folder=pages_index_folder, 
@@ -118,6 +123,10 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             length = int(query["len"][0])
         except:
             length = 10
+        try:
+            add_fields = set([item.strip() for item in query["add"][0].split(",") if item.strip()])
+        except:
+            add_fields = set()
         return_json = query.has_key("json")   
         import datetime
         if query_text:
@@ -150,6 +159,13 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                              "field_id": field_id, 
                              "snippet": snippet, 
                              "weight": result.result_weight}
+            if add_fields:
+                add_data_dict = {}
+                for field_id in add_fields:
+                    field_value_encoded = field_id in server.object_cfields[obj_id] and server.object_cfields[obj_id][field_id] or ""
+                    field_value = type(field_value_encoded) == str and field_value_encoded.decode("windows-1251") or field_value_encoded
+                    add_data_dict[field_id] = field_value
+                response_elem["add"] = add_data_dict
             response_elems.append(response_elem)
         response_object["results"] = response_elems
         import json
