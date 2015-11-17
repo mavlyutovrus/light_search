@@ -154,7 +154,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             else:
                 obj_id, field_id, snippet_encoded = server.get_cfields_segment_data(result.segment_id)
             snippet = server.select_words_in_snippet(result.words2select, snippet_encoded)
-            response_elem = {"index:": res_index, 
+            response_elem = {"index": res_index, 
                              "obj_id": obj_id, 
                              "field_id": field_id, 
                              "snippet": snippet, 
