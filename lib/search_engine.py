@@ -19,7 +19,7 @@ class TSearchEngineResult(object):
 
 class TSearchEngine(object):
     #maximum amount to store in index, the rest is in the bloomfilter
-    MAX_WORD_FREQ = 500000
+    MAX_WORD_FREQ = 300000
     SEGMENT_SIZE = 64 # words
     MAX_QUERY_SIZE = 5
     CRUDE_FILTER_TRIM_PROPORTION = 0.5
