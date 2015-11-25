@@ -24,6 +24,13 @@ class TSearchServer():
             self.object_cfields[book.object_id] = {}
             for field in book.object_fields:
                 self.object_cfields[book.object_id][field.field_id] = field.field_value
+    """ fast """
+    def get_pages_obj_id(self, segment_id):
+        return self.pages_search_engine.segment_index.get_obj_id_by_segment_id(segment_id)
+    
+    """ fast """
+    def get_cfields_obj_id(self, segment_id):
+        return self.cfields_search_engine.segment_index.get_obj_id_by_segment_id(segment_id)
     
     def get_pages_segment_data(self, segment_id):
         obj_id, field_id, start, length = self.pages_search_engine.segment_index.get_segment(segment_id)
@@ -51,14 +58,44 @@ class TSearchServer():
         snippet = snippet.decode("windows-1251").replace(chr(13), " ").replace(chr(10), " ").replace('"', "'")
         import re
         snippet = re.subn("\s+", " ", snippet)[0]
-        return snippet     
+        return snippet
     
-    def search(self, query, query_tokens=[]):
-        return [self.cfields_search_engine.search(query=query, query_tokens=query_tokens),
-                self.pages_search_engine.search(query=query, query_tokens=query_tokens),]
-                
-
-
+    def search(self, query, query_tokens=[], #filter params:
+                 filter_obj_id=None, min_year=None, 
+                 max_year=None, filter_year=None, 
+                 max_pages_count=None, min_pages_count=None):
+        cfields_results, cfields_timing = self.cfields_search_engine.search(query=query, query_tokens=query_tokens)
+        pages_results, pages_timing = self.pages_search_engine.search(query=query, query_tokens=query_tokens)
+        print filter_obj_id, min_year, max_year, filter_year, max_pages_count, min_pages_count
+        print len(cfields_results)
+        def filter_match(obj_id):
+            try:
+                year = int(self.object_cfields[obj_id]["year"])
+            except:
+                year = 0
+            try:
+                pages_count = int(self.object_cfields[obj_id]["pages_count"])
+            except:
+                pages_count = 0
+            if filter_obj_id != None and obj_id != filter_obj_id:
+                return False
+            if filter_year != None and filter_year != year:
+                return False
+            if max_year != None and max_year < year:
+                return False
+            if min_year != None and min_year > year:
+                return False
+            if max_pages_count != None and max_pages_count < pages_count:
+                return False
+            if min_pages_count != None and min_pages_count > pages_count:
+                return False
+            return True
+        cfields_results = [result for result in cfields_results \
+                                if filter_match(self.get_cfields_obj_id(result.segment_id))]
+        pages_results = [result for result in pages_results \
+                                if filter_match(self.get_pages_obj_id(result.segment_id))]
+        return [(cfields_results, cfields_timing), (pages_results, pages_timing) ]
+        
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
 
 
@@ -127,10 +164,46 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             add_fields = set([item.strip() for item in query["add"][0].split(",") if item.strip()])
         except:
             add_fields = set()
+        """ filter params """
+        filter_obj_id = None
+        min_year = None
+        max_year = None
+        filter_year = None
+        max_pages_count = None
+        min_pages_count = None
+        try:
+            filter_obj_id = query["obj_id"][0]
+        except:
+            filter_obj_id = None
+        try:
+            min_year = int(query["min_year"][0])
+        except:
+            min_year = None
+        try:
+            max_year = int(query["max_year"][0])
+        except:
+            max_year = None
+        try:
+            filter_year = int(query["year"][0])
+        except:
+            filter_year = None 
+        try:
+            max_pages_count = int(query["max_pcount"][0])
+        except:
+            max_pages_count = None          
+        try:
+            min_pages_count = int(query["min_pcount"][0])
+        except:
+            min_pages_count = None    
+        
         return_json = query.has_key("json")   
         import datetime
         if query_text:
-            custom_fields_matches, pages_matches = server.search(query_text)
+            custom_fields_matches, pages_matches = server.search(query_text, [], 
+                                                                 filter_obj_id=filter_obj_id, 
+                                                                 min_year=min_year, max_year=max_year, 
+                                                                 filter_year=filter_year, 
+                                                                 max_pages_count=max_pages_count, min_pages_count=min_pages_count)
             timings = pages_matches[-1]
             custom_fields_matches, pages_matches = custom_fields_matches[0], pages_matches[0]
             #small hack to allow custom fields with same words count be on top
