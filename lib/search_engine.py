@@ -192,13 +192,14 @@ class TSearchEngine(object):
         selected_segments = segment_ids[top_weight_indices]
         selected_segments_weights = segment_weights[top_weight_indices]
         """ remove segments with small weight comparing to the one with the maximum weight"""
-        max_weight = selected_segments_weights[selected_segments_weights.shape[0] - 1]
-        min_weight = selected_segments_weights[0]
-        min_allowed = max_weight * TSearchEngine.CRUDE_FILTER_TRIM_PROPORTION
-        if min_allowed > min_weight:
-            new_start_position = numpy.argmax(selected_segments_weights >= min_allowed)
-            selected_segments = selected_segments[new_start_position:]
-            selected_segments_weights = selected_segments_weights[new_start_position:]
+        if top_weight_indices.size:
+            max_weight = selected_segments_weights[selected_segments_weights.shape[0] - 1]
+            min_weight = selected_segments_weights[0]
+            min_allowed = max_weight * TSearchEngine.CRUDE_FILTER_TRIM_PROPORTION
+            if min_allowed > min_weight:
+                new_start_position = numpy.argmax(selected_segments_weights >= min_allowed)
+                selected_segments = selected_segments[new_start_position:]
+                selected_segments_weights = selected_segments_weights[new_start_position:]
         selected_segments_dict = set(selected_segments)
         
         @numpy.vectorize

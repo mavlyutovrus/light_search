@@ -115,7 +115,6 @@ class TSearchServer():
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
 
 
-"""
 port = int(sys.argv[1])
 books_folder = sys.argv[2]
 pages_index_folder = sys.argv[3]
@@ -127,7 +126,7 @@ books_folder = "/home/arslan/src/ngpedia/books1000"
 pages_index_folder ="indices/"
 csv_path = "/home/arslan/src/ngpedia/search_system/books.csv"
 cfields_index_folder = "/home/arslan/src/ngpedia/search_system/custom_fields_indices/"
-
+"""
 
 
 
