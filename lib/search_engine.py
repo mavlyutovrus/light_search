@@ -145,7 +145,7 @@ class TSearchEngine(object):
                     if in_filter:
                         by_segment[segment_id].setdefault(hypo, []).append((position, CASE_LOWER))
         
-    def get_initial_matches(self, tokens_occurrences, token2idf):
+    def get_initial_matches(self, tokens_occurrences, token2idf, filter_segments=None):
         #TODO: currently not able to properly search queries with duplicated words
         """token_occurences = (first 100K occurrences, bloom filter for the other occurrences)"""
         tokens_occurrences = {token:codes_and_bloomfilter[0] \
@@ -167,6 +167,11 @@ class TSearchEngine(object):
         for token, segments in tokens_segments.items():
             #important for clear ranking + surprisingly makes the process faster
             unique_segments = numpy.unique(segments)
+            if type(filter_segments) != type(None):
+                #in1d is very slow on big arrays, trim with ranges
+                unique_segments = unique_segments[unique_segments <= numpy.amax(filter_segments)]
+                unique_segments = unique_segments[unique_segments >= numpy.amin(filter_segments)]
+                unique_segments = unique_segments[numpy.in1d(unique_segments, filter_segments, assume_unique=True)]
             column_indices.resize(unique_segments.shape[0])
             weight = token2idf[token]
             values = numpy.repeat([weight], unique_segments.shape[0])
@@ -223,7 +228,7 @@ class TSearchEngine(object):
         return trimmed_query_tokens
     
     """ return list of TSearchEngineResult sorted by weights (high weight first) """
-    def search(self, query, query_tokens=[]):
+    def search(self, query, query_tokens=[], filter_segments=None):
         if not query_tokens:
             if type(query) == unicode:
                 query = query.encode("utf8") 
@@ -248,7 +253,7 @@ class TSearchEngine(object):
         time_upload_words_occurences = int((datetime.datetime.now() - start).total_seconds() * 1000)
         
         start = datetime.datetime.now()
-        by_segment = self.get_initial_matches(tokens_occurences, local_token2idf)
+        by_segment = self.get_initial_matches(tokens_occurences, local_token2idf, filter_segments=filter_segments)
         time_initial_matches = int((datetime.datetime.now() - start).total_seconds() * 1000)
         
         start = datetime.datetime.now()

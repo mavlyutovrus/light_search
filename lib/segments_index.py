@@ -61,6 +61,14 @@ class TSegmentIndexReader():
         self.skip_list = pickle.load(skip_list_in)
         obj2first_segment_in = open(os.path.join(self.indices_dir, "obj2first_segment.pickle"), "rb")
         self.obj2first_segment = pickle.load(obj2first_segment_in)
+        self.obj2segments_range = {}
+        for index in xrange(1, len(self.obj2first_segment)):
+            obj_id = self.obj2first_segment[index - 1][0]
+            start = self.obj2first_segment[index - 1][1]
+            end = self.obj2first_segment[index][1]
+            self.obj2segments_range[obj_id] = (start, end)
+        last_obj_id, last_obj_id_start = self.obj2first_segment[-1]
+        self.obj2segments_range[last_obj_id] = (last_obj_id_start, last_obj_id_start + 1000)
     
     def get_obj_id_by_segment_id(self, segment_id):
         left = 0
@@ -77,7 +85,13 @@ class TSegmentIndexReader():
             else:
                 left = mid
         return self.obj2first_segment[left][0]
-            
+    
+    def get_segments_by_obj_id(self, obj_id):
+        if not obj_id in self.obj2segments_range:
+            return None
+        start, end = self.obj2segments_range[obj_id]
+        import numpy
+        return numpy.array(range(start, end), dtype=numpy.int64)     
     
     def get_segment(self, segment_id):
         block_index, offset_in_block = divmod(segment_id, SEGMENTS_OFFSETS_BLOCK_SIZE)

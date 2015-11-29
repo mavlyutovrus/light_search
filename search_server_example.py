@@ -5,6 +5,7 @@ import socket
 from lib.crawler import TCrawler
 
 
+
 class TSearchServer():
     def __init__(self, books_folder, pages_index_folder, csv_path, cfields_index_folder):
         self.books_folder = books_folder
@@ -31,6 +32,14 @@ class TSearchServer():
     """ fast """
     def get_cfields_obj_id(self, segment_id):
         return self.cfields_search_engine.segment_index.get_obj_id_by_segment_id(segment_id)
+    
+    """ fast: numpy array of segment ids """
+    def get_pages_obj_id_segments(self, obj_id):
+        return self.pages_search_engine.segment_index.get_segments_by_obj_id(obj_id)
+    
+    """ fast: numpy array of segment ids """
+    def get_cfields_obj_id_segments(self, obj_id):
+        return self.cfields_search_engine.segment_index.get_segments_by_obj_id(obj_id)    
     
     def get_pages_segment_data(self, segment_id):
         obj_id, field_id, start, length = self.pages_search_engine.segment_index.get_segment(segment_id)
@@ -64,10 +73,17 @@ class TSearchServer():
                  filter_obj_id=None, min_year=None, 
                  max_year=None, filter_year=None, 
                  max_pages_count=None, min_pages_count=None):
-        cfields_results, cfields_timing = self.cfields_search_engine.search(query=query, query_tokens=query_tokens)
-        pages_results, pages_timing = self.pages_search_engine.search(query=query, query_tokens=query_tokens)
-        print filter_obj_id, min_year, max_year, filter_year, max_pages_count, min_pages_count
-        print len(cfields_results)
+        if filter_obj_id != None:
+            cfields_segments, pages_segments = self.get_cfields_obj_id_segments(filter_obj_id), \
+                                               self.get_pages_obj_id_segments(filter_obj_id)
+        else:
+            cfields_segments, pages_segments = None, None
+        cfields_results, cfields_timing = self.cfields_search_engine.search(query=query, 
+                                                                            query_tokens=query_tokens, 
+                                                                            filter_segments=cfields_segments)
+        pages_results, pages_timing = self.pages_search_engine.search(query=query, 
+                                                                      query_tokens=query_tokens,
+                                                                      filter_segments=pages_segments)
         def filter_match(obj_id):
             try:
                 year = int(self.object_cfields[obj_id]["year"])
@@ -99,7 +115,7 @@ class TSearchServer():
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
 
 
-
+"""
 port = int(sys.argv[1])
 books_folder = sys.argv[2]
 pages_index_folder = sys.argv[3]
@@ -111,7 +127,7 @@ books_folder = "/home/arslan/src/ngpedia/books1000"
 pages_index_folder ="indices/"
 csv_path = "/home/arslan/src/ngpedia/search_system/books.csv"
 cfields_index_folder = "/home/arslan/src/ngpedia/search_system/custom_fields_indices/"
-"""
+
 
 
 
