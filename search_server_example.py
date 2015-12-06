@@ -2,8 +2,7 @@
 import BaseHTTPServer
 import sys
 import socket
-from lib.crawler import TCrawler
-
+from lib.crawler import TCrawler, LIB_SECTION_FIELD
 
 
 class TSearchServer():
@@ -72,7 +71,8 @@ class TSearchServer():
     def search(self, query, query_tokens=[], #filter params:
                  filter_obj_id=None, min_year=None, 
                  max_year=None, filter_year=None, 
-                 max_pages_count=None, min_pages_count=None):
+                 max_pages_count=None, min_pages_count=None,
+                 filter_library_section_code=None):
         if filter_obj_id != None:
             cfields_segments, pages_segments = self.get_cfields_obj_id_segments(filter_obj_id), \
                                                self.get_pages_obj_id_segments(filter_obj_id)
@@ -93,6 +93,10 @@ class TSearchServer():
                 pages_count = int(self.object_cfields[obj_id]["pages_count"])
             except:
                 pages_count = 0
+            try:
+                library_section_codes = self.object_cfields[obj_id][LIB_SECTION_FIELD]
+            except:
+                library_section_codes = []
             if filter_obj_id != None and obj_id != filter_obj_id:
                 return False
             if filter_year != None and filter_year != year:
@@ -104,6 +108,8 @@ class TSearchServer():
             if max_pages_count != None and max_pages_count < pages_count:
                 return False
             if min_pages_count != None and min_pages_count > pages_count:
+                return False
+            if filter_library_section_code != None and not filter_library_section_code in library_section_codes:
                 return False
             return True
         cfields_results = [result for result in cfields_results \
@@ -186,6 +192,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         filter_year = None
         max_pages_count = None
         min_pages_count = None
+        library_section_code = None
         try:
             filter_obj_id = query["obj_id"][0]
         except:
@@ -210,6 +217,10 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             min_pages_count = int(query["min_pcount"][0])
         except:
             min_pages_count = None    
+        try:
+            library_section_code = int(query["lib_section"][0])
+        except:
+            library_section_code = None   
         
         return_json = query.has_key("json")   
         import datetime
@@ -218,7 +229,9 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                                                                  filter_obj_id=filter_obj_id, 
                                                                  min_year=min_year, max_year=max_year, 
                                                                  filter_year=filter_year, 
-                                                                 max_pages_count=max_pages_count, min_pages_count=min_pages_count)
+                                                                 max_pages_count=max_pages_count, 
+                                                                 min_pages_count=min_pages_count,
+                                                                 filter_library_section_code=library_section_code)
             timings = pages_matches[-1]
             custom_fields_matches, pages_matches = custom_fields_matches[0], pages_matches[0]
             #small hack to allow custom fields with same words count be on top

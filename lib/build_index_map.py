@@ -74,6 +74,9 @@ def build_index_map(dir, intermid_results_dir, indices_dir, log_out):
                 field_value = open(field.field_file_path).read()
             else:
                 field_value = field.field_value
+            if not type(field_value) == str:
+                print obj_id, ":", field_id, " - not a string value"
+                continue
             tokens_matches = span_tokenize_windows1251(field_value)
             for first_match_index in xrange(0, len(tokens_matches), SEGMENT_SIZE):
                 last_match_index = min(first_match_index + SEGMENT_SIZE - 1, 
