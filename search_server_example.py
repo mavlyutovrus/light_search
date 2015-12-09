@@ -69,6 +69,7 @@ class TSearchServer():
         return snippet
     
     def search(self, query, query_tokens=[], #filter params:
+                 filter_field_type=None,
                  filter_obj_id=None, min_year=None, 
                  max_year=None, filter_year=None, 
                  max_pages_count=None, min_pages_count=None,
@@ -78,12 +79,18 @@ class TSearchServer():
                                                self.get_pages_obj_id_segments(filter_obj_id)
         else:
             cfields_segments, pages_segments = None, None
-        cfields_results, cfields_timing = self.cfields_search_engine.search(query=query, 
-                                                                            query_tokens=query_tokens, 
-                                                                            filter_segments=cfields_segments)
-        pages_results, pages_timing = self.pages_search_engine.search(query=query, 
-                                                                      query_tokens=query_tokens,
-                                                                      filter_segments=pages_segments)
+        if filter_field_type != None and filter_field_type == "pages":
+            cfields_results, cfields_timing = [], []
+        else:
+            cfields_results, cfields_timing = self.cfields_search_engine.search(query=query, 
+                                                                                query_tokens=query_tokens, 
+                                                                                filter_segments=cfields_segments)
+        if filter_field_type != None and filter_field_type != "pages":
+            pages_results, pages_timing = [], []
+        else:
+            pages_results, pages_timing = self.pages_search_engine.search(query=query, 
+                                                                          query_tokens=query_tokens,
+                                                                          filter_segments=pages_segments)
         def filter_match(obj_id):
             try:
                 year = int(self.object_cfields[obj_id]["year"])
@@ -112,10 +119,27 @@ class TSearchServer():
             if filter_library_section_code != None and not filter_library_section_code in library_section_codes:
                 return False
             return True
-        cfields_results = [result for result in cfields_results \
-                                if filter_match(self.get_cfields_obj_id(result.segment_id))]
-        pages_results = [result for result in pages_results \
-                                if filter_match(self.get_pages_obj_id(result.segment_id))]
+        # filter by custom field type
+        if filter_field_type != None and filter_field_type != "pages":
+            segments = [result.segment_id for result in cfields_results]
+            segments = [segment_id for segment_id in set(segments)]
+            segments.sort()
+            segment2field = {segment_id : self.cfields_search_engine.segment_index.get_segment(segment_id)[1] 
+                                            for segment_id in segments}
+            cfields_results = [result for result in cfields_results \
+                                            if segment2field[result.segment_id] == filter_field_type]
+            
+        # filter by object features
+        if      filter_obj_id != None or \
+                max_year != None or \
+                min_year != None or \
+                max_pages_count !=None or \
+                min_pages_count != None or \
+                filter_library_section_code != None:
+            cfields_results = [result for result in cfields_results \
+                                    if filter_match(self.get_cfields_obj_id(result.segment_id))]
+            pages_results = [result for result in pages_results \
+                                    if filter_match(self.get_pages_obj_id(result.segment_id))]
         return [(cfields_results, cfields_timing), (pages_results, pages_timing) ]
         
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
@@ -186,6 +210,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         except:
             add_fields = set()
         """ filter params """
+        filter_field_type = None
         filter_obj_id = None
         min_year = None
         max_year = None
@@ -193,6 +218,10 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         max_pages_count = None
         min_pages_count = None
         library_section_code = None
+        try:
+            filter_field_type = query["field"][0]
+        except:
+            filter_field_type = None
         try:
             filter_obj_id = query["obj_id"][0]
         except:
@@ -226,6 +255,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         import datetime
         if query_text:
             custom_fields_matches, pages_matches = server.search(query_text, [], 
+                                                                 filter_field_type=filter_field_type,
                                                                  filter_obj_id=filter_obj_id, 
                                                                  min_year=min_year, max_year=max_year, 
                                                                  filter_year=filter_year, 
