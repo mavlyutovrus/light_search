@@ -73,7 +73,8 @@ class TSearchServer():
                  filter_obj_id=None, min_year=None, 
                  max_year=None, filter_year=None, 
                  max_pages_count=None, min_pages_count=None,
-                 filter_library_section_code=None):
+                 filter_library_section_code=None,
+                 filter_udc=None):
         if filter_obj_id != None:
             cfields_segments, pages_segments = self.get_cfields_obj_id_segments(filter_obj_id), \
                                                self.get_pages_obj_id_segments(filter_obj_id)
@@ -92,6 +93,11 @@ class TSearchServer():
                                                                           query_tokens=query_tokens,
                                                                           filter_segments=pages_segments)
         def filter_match(obj_id):
+            
+            try:
+                udc = self.object_cfields[obj_id]["udc"]
+            except:
+                udc = ""
             try:
                 year = int(self.object_cfields[obj_id]["year"])
             except:
@@ -104,6 +110,8 @@ class TSearchServer():
                 library_section_codes = self.object_cfields[obj_id][LIB_SECTION_FIELD]
             except:
                 library_section_codes = []
+            if filter_udc and (set(filter_udc.split(".")) - set(udc.split("."))):
+                return False
             if filter_obj_id != None and obj_id != filter_obj_id:
                 return False
             if filter_year != None and filter_year != year:
@@ -135,7 +143,8 @@ class TSearchServer():
                 min_year != None or \
                 max_pages_count !=None or \
                 min_pages_count != None or \
-                filter_library_section_code != None:
+                filter_library_section_code != None or \
+                filter_udc != None:
             cfields_results = [result for result in cfields_results \
                                     if filter_match(self.get_cfields_obj_id(result.segment_id))]
             pages_results = [result for result in pages_results \
@@ -218,6 +227,11 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         max_pages_count = None
         min_pages_count = None
         library_section_code = None
+        udc = None
+        try:
+            udc = query["udc"][0]
+        except:
+            udc = None
         try:
             filter_field_type = query["field"][0]
         except:
@@ -261,7 +275,9 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                                                                  filter_year=filter_year, 
                                                                  max_pages_count=max_pages_count, 
                                                                  min_pages_count=min_pages_count,
-                                                                 filter_library_section_code=library_section_code)
+                                                                 filter_library_section_code=library_section_code,
+                                                                 filter_udc=udc
+                                                                 )
             timings = pages_matches[-1]
             custom_fields_matches, pages_matches = custom_fields_matches[0], pages_matches[0]
             #small hack to allow custom fields with same words count be on top
