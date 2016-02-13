@@ -23,7 +23,7 @@ class TSearchEngine(object):
     SEGMENT_SIZE = 64 # words
     MAX_QUERY_SIZE = 5
     CRUDE_FILTER_TRIM_PROPORTION = 0.5
-    CRUDE_FILTER_MAX_SELECT = 2000
+    CRUDE_FILTER_MAX_SELECT = 10000
     STAT_FILTER_CONTEXT = 2
     
     def __init__(self, index_location="./"):
@@ -40,12 +40,13 @@ class TSearchEngine(object):
     
     """ much faster than code2match """
     def code2segment_id(self, code):
-        return (code >> 2) / TSearchEngine.SEGMENT_SIZE
+        return (code >> 3) / TSearchEngine.SEGMENT_SIZE
     
     def code2match(self, code):
+        has_add_codes, code = code % 2, (code >> 1)
         match_weight, code = code % 4, (code >> 2)
         position, segment_id = code % TSearchEngine.SEGMENT_SIZE, code / TSearchEngine.SEGMENT_SIZE
-        return segment_id, position, match_weight
+        return segment_id, position, match_weight, has_add_codes
  
 
     def shortest_span(self, positions):
@@ -154,7 +155,7 @@ class TSearchEngine(object):
                                                     if codes.shape[0] > 0}        
         if not tokens_occurrences:
             return {}
-        tokens_segments = {token:codes / (4 * TSearchEngine.SEGMENT_SIZE) \
+        tokens_segments = {token:codes / (2 * 4 * TSearchEngine.SEGMENT_SIZE) \
                             for token, codes in tokens_occurrences.items()}        
         """ get max segment_id == column_size """
         column_size = 0
@@ -211,7 +212,7 @@ class TSearchEngine(object):
             #much faster than in1d
             selected_codes = codes[get_indices_of_selected(segments)]
             for code in selected_codes:
-                segment_id, position, match_case = self.code2match(code)
+                segment_id, position, match_case, has_add_match = self.code2match(code)
                 by_segment.setdefault(segment_id, {})
                 by_segment[segment_id].setdefault(token, []).append((position, match_case))
         return by_segment 
@@ -258,7 +259,7 @@ class TSearchEngine(object):
         time_initial_matches = int((datetime.datetime.now() - start).total_seconds() * 1000)
         
         start = datetime.datetime.now()
-        self.add_matches_from_stat_filter(by_segment, tokens_occurences)
+        #self.add_matches_from_stat_filter(by_segment, tokens_occurences)
         time_stat_filter = int((datetime.datetime.now() - start ).total_seconds() * 1000)
         
         start = datetime.datetime.now()

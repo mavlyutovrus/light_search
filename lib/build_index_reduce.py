@@ -7,6 +7,7 @@ import numpy
 import shelve
 import os
 import sys
+from pstats import add_callers
 
 
 
@@ -18,6 +19,7 @@ MAX_WORD_FREQ_FOR_INDEX = 100000000
 def prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid=""):
     keys_out = open(keys_out_fname, "wb", buffering=1000000)
     values_out = open(values_out_fname, "wb", buffering=1000000)
+    add_values_out = open(values_out_fname + ".add", "w", buffering=1000000)
     all_codes = []
     tokens = {}
     tokens_freqs = {}
@@ -36,12 +38,15 @@ def prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid=""):
         if token_freq < MIN_WORD_FREQ_FOR_INDEX or token_freq > MAX_WORD_FREQ_FOR_INDEX:
             continue
         all2index = token_freq < 2 * TSearchEngine.MAX_WORD_FREQ
+        #NB: temporary
+        all2index  = True
         prob_filter = None
         if not all2index:
             prob_filter_capacity = token_freq - TSearchEngine.MAX_WORD_FREQ
             prob_filter = BloomFilter(capacity=prob_filter_capacity, error_rate=0.01)
         codes2index = []
         send2index = TSearchEngine.MAX_WORD_FREQ
+        """
         for chunk_index in chunks:
             for code in all_codes[chunk_index]:
                 if all2index or send2index > 0:
@@ -54,6 +59,39 @@ def prepare_matches(chunk_fname, keys_out_fname, values_out_fname, pid=""):
             all_codes[chunk_index] = []
         start_position = values_out.tell()
         pickle.dump(numpy.array(codes2index, dtype=numpy.int64), values_out)
+        prob_filter_start_position = values_out.tell()
+        if prob_filter:
+            prob_filter.tofile(values_out)
+        prob_filter_dump_size = values_out.tell() - prob_filter_start_position
+        pickle.dump((token, token_freq, start_position, prob_filter_dump_size), keys_out)
+        progress_counter.add()
+        """
+        word_codes = []
+        for chunk_index in chunks:
+            word_codes += all_codes[chunk_index]
+            all_codes[chunk_index] = []
+        word_codes.sort()
+        main_occurences = []
+        add_occurences = {}
+        prev_id = -1
+        for code in word_codes:
+            segment_id = (code >> 2) / TSearchEngine.SEGMENT_SIZE
+            other_info = code - (segment_id << 2) * TSearchEngine.SEGMENT_SIZE
+            if segment_id == prev_id:
+                add_occurences.setdefault(segment_id, []).append(other_info)
+                main_occurences[-1] = ((main_occurences[-1] >> 1) << 1) + 1
+                continue
+            prev_id = segment_id
+            main_occurences += [code << 1]
+        
+        if add_occurences:
+            line = token + "\t" +\
+                    "\t".join([str(segment_id) + "=" + ",".join(str(occur) for occur in segment_occurences) \
+                                        for segment_id, segment_occurences in add_occurences.items()])
+            add_values_out.write(line + "\n")
+        
+        start_position = values_out.tell()
+        pickle.dump(numpy.array(main_occurences, dtype=numpy.int64), values_out)
         prob_filter_start_position = values_out.tell()
         if prob_filter:
             prob_filter.tofile(values_out)
