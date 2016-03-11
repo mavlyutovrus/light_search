@@ -11,9 +11,24 @@ import sys
 import os
 
 
-SEGMENT_SIZE = TSearchEngine.SEGMENT_SIZE
+
 REDUCERS_COUNT = 100
 REDUCERS_FILES_BUFFER = 1000000 #1MB
+
+WEIGHT_SHIFT = 2
+SEGMENT_POS_SHIFT = 6
+BOOK_SHIFT = 20
+SEGMENT_SIZE = (1 << SEGMENT_POS_SHIFT)
+
+
+def match2code(segment_id, book_id, segment_position, match_weight=0):
+    
+    return  (segment_id         << (WEIGHT_SHIFT + SEGMENT_POS_SHIFT + BOOK_SHIFT)) + \
+            (book_id            << (WEIGHT_SHIFT + SEGMENT_POS_SHIFT)) + \
+            (segment_position   <<  WEIGHT_SHIFT) + \
+             match_weight
+
+
 """ dir = either path to csv or to folder with books """
 def build_index_map(dir, intermid_results_dir, indices_dir, log_out):
     books_dir = ""
@@ -54,20 +69,17 @@ def build_index_map(dir, intermid_results_dir, indices_dir, log_out):
         words_in_buffer[0] += 1
         if words_in_buffer[0] >= MAX_BUFFER_SIZE:
             flush_buffer()
-    
-    def match2code(segment_id, position, match_weight=0):
-        """ position < SEGMENT_SIZE """
-        code = segment_id * SEGMENT_SIZE + position
-        """ consider 3 word case weights (0, 1, 2) """
-        code = (code << 2) + match_weight
-        return code
+
     
     crawler = TCrawler(verbosity=0)
     segment_index_writer = TSegmentIndexWriter(indices_dir)
     books_counter = TCustomCounter("ParsedBooks", log_out, verbosity=1, interval=100)
     
+    max_book_id = [0]
+    
     def process_book(book_obj):
         obj_id = book_obj.object_id
+        max_book_id[0] = max(int(obj_id), max_book_id[0])
         for field in book_obj.object_fields:
             field_id = field.field_id
             if field.field_file_path:
@@ -92,7 +104,7 @@ def build_index_map(dir, intermid_results_dir, indices_dir, log_out):
                     segment_token = segment_match[-1]
                     match_case = segment_match[-2]
                     word_case_weight = match_case == CASE_UPPER and 2 or match_case == CASE_TITLE and 1 or 0
-                    code = match2code(segment_id, segment_match_index, word_case_weight)
+                    code = match2code(segment_id, int(obj_id), segment_match_index, word_case_weight)
                     to_word_index(segment_token,  code)
         books_counter.add()
         
@@ -107,5 +119,6 @@ def build_index_map(dir, intermid_results_dir, indices_dir, log_out):
     for reducer in reducers_pool:
         reducer.close()
     segment_index_writer.save()
-
+    print "segments count: ", segment_index_writer.segments_count
+    print "max book id: ", max_book_id
 

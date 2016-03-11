@@ -75,17 +75,22 @@ class TSearchServer():
                  max_pages_count=None, min_pages_count=None,
                  filter_library_section_code=None,
                  filter_udc=None):
+        
+        
         if filter_obj_id != None:
             cfields_segments, pages_segments = self.get_cfields_obj_id_segments(filter_obj_id), \
                                                self.get_pages_obj_id_segments(filter_obj_id)
         else:
             cfields_segments, pages_segments = None, None
+        """
         if filter_field_type != None and filter_field_type == "pages":
             cfields_results, cfields_timing = [], []
         else:
             cfields_results, cfields_timing = self.cfields_search_engine.search(query=query, 
                                                                                 query_tokens=query_tokens, 
                                                                                 filter_segments=cfields_segments)
+        """
+        cfields_results, cfields_timing = [], []
         if filter_field_type != None and filter_field_type != "pages":
             pages_results, pages_timing = [], []
         else:
