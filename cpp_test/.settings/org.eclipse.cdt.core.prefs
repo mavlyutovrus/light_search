@@ -1,0 +1,6 @@
+eclipse.preferences.version=1
+environment/project/0.1336158351/PATH/delimiter=\:
+environment/project/0.1336158351/PATH/operation=append
+environment/project/0.1336158351/PATH/value=/bin\:/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/usr/games\:/usr/local/games\:/home/arslan/dataServer10/arslan/hadoop/bin\:/home/arslan/dataServer10/arslan/bin
+environment/project/0.1336158351/append=true
+environment/project/0.1336158351/appendContributed=true
