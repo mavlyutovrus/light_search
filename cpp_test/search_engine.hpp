@@ -12,6 +12,7 @@
 #include <math.h>
 #include "time_routines.hpp"
 #include <queue>
+#include <math.h>
 
 using namespace std;
 
@@ -51,8 +52,12 @@ struct TSegmentMatches {
 const string KEY2OFFSETS_FILE = "main_index_keys.db.txt";
 const string OCCURENCES_FILE = "main_index_values.pickle";
 const int MAX_WORDS4QUERY = 10;
+const int MAX_KEYS2CONSIDER = 5;
 const double CRUDE_FILTER_TRIM_PROPORTION = 0.5;
 const int MAX_OCCURENCES2RETURN = 10000;
+
+
+
 
 class TSearchIndex {
 private:
@@ -75,6 +80,9 @@ private:
     static inline unsigned short int GetWeight(TOccurence occurence) {
         return (occurence - ((occurence >> WEIGHT_BITS) << WEIGHT_BITS));
     }
+    int TmpBufferPositions[(1 << SEGMENT_POS_BITS) + 1];
+    int TmpBufferPosition2KeyIndex[(1 << SEGMENT_POS_BITS) + 1];
+    int TmpBufferCountsInside[MAX_WORDS4QUERY];
 public:
 
 
@@ -112,37 +120,82 @@ public:
 	}
 
 
-	static inline int GetMinValueIndex(const int* positions, const vector<TOccurences>& occurences) {
-		int minValueIndex = -1;
-		for (TWordIndex index = 0; index < occurences.size(); ++index) {
-			if (occurences[index].size() <= positions[index] + 1) {
-				continue;
-			}
-			if (minValueIndex == -1 || occurences[index][positions[index]] < occurences[minValueIndex][positions[minValueIndex]]) {
-				minValueIndex = index;
-			}
-		}
-		return minValueIndex;
-	}
-
 	static inline double Freq2IdfFreq(unsigned long long freq) {
 		return 1.0 / log(freq + 2.0);
 	}
 
 	inline double SegmentMatchSimpleWeight(const TSegmentMatches& match,
-										   const unsigned long long* keyIndex2freq) const {
-		bool seen[MAX_WORDS4QUERY]{0};
-		double weight = 0.0;
-		for (int occIndex = 0; occIndex < match.SegmentOccurences.size(); ++occIndex) {
-			const TPosWeightWithWIndex& occurence = match.SegmentOccurences.at(occIndex);
-			int keyIndex = occurence.second;
-			if (seen[keyIndex]) {
-				continue;
-			}
-			seen[keyIndex] = true;
+						       const unsigned long long* keyIndex2freq) const {
+	        unsigned long long seen = 0;
+	    	double weight = 0.0;
+    		for (int occIndex = 0; occIndex < match.SegmentOccurences.size(); ++occIndex) {
+		    int keyIndex = match.SegmentOccurences.at(occIndex).second;
+		    if (!(seen & (1 << keyIndex))) {
+			seen += (1 << keyIndex);
 			weight += Freq2IdfFreq(keyIndex2freq[keyIndex]);
+		    }
 		}
 		return weight;
+	}
+
+	
+	inline double SegmentMatchSimpleWeight1(const TSegmentMatches& match, const unsigned long long* keyIndex2freq) {
+	        int bufferEnd = 0; 
+		int uniqTokensCount = 0;
+	        unsigned long long seen = 0;
+		double weight = 0;
+		for (auto occIt = match.SegmentOccurences.begin(); occIt != match.SegmentOccurences.end(); ++occIt) {
+			const TPosWeightWithWIndex& occurence = *occIt;
+			int keyIndex = occurence.second;
+			int position = occurence.first >> WEIGHT_BITS;
+			TmpBufferPosition2KeyIndex[position] = keyIndex;
+			TmpBufferPositions[bufferEnd] = position;
+			TmpBufferCountsInside[keyIndex] = 0;
+		        ++bufferEnd;	
+		        if (!(seen & (1 << keyIndex))) {
+			    seen += (1 << keyIndex);
+			    ++uniqTokensCount;
+			    weight += Freq2IdfFreq(keyIndex2freq[keyIndex]);
+		        }
+		}
+		sort(&TmpBufferPositions[0], &TmpBufferPositions[0] + bufferEnd);
+	        int shortest_span_start = -1;
+		int shortest_span_end = -1;
+		int shortest_span_len = -1;
+		{
+
+			int start = 0;
+			int end = 1;
+			shortest_span_start = start;
+			shortest_span_end = end;
+			shortest_span_len = -1;
+			++TmpBufferCountsInside[TmpBufferPosition2KeyIndex[TmpBufferPositions[start]]];
+			int uniqInside = 1;
+			while (start < bufferEnd) {
+				while (end < bufferEnd && uniqInside < uniqTokensCount) {
+					if (TmpBufferCountsInside[TmpBufferPosition2KeyIndex[TmpBufferPositions[end]]] == 0) {
+						++uniqInside;
+					}
+					++TmpBufferCountsInside[TmpBufferPosition2KeyIndex[TmpBufferPositions[end]]];
+					++end;
+				}
+				if (uniqInside < uniqTokensCount) {
+					break;
+				}
+				int span_len = TmpBufferPositions[end - 1] - TmpBufferPositions[start] + 1;
+				if (shortest_span_len == -1 || span_len < shortest_span_len) {
+					shortest_span_start = start;
+					shortest_span_end = end;
+					shortest_span_len = span_len;
+				}
+				if (TmpBufferCountsInside[TmpBufferPosition2KeyIndex[TmpBufferPositions[start]]] == 1) {
+					--uniqInside;
+				}
+				--TmpBufferCountsInside[TmpBufferPosition2KeyIndex[TmpBufferPositions[start]]];
+				++start;
+			}
+		}
+		return weight + (double)uniqTokensCount / (1000 * shortest_span_len);
 	}
 
 	TSegmentMatches SelectShortestSpan(TSegmentMatches& match) {
@@ -273,6 +326,19 @@ public:
 		return pair<int, double>(matched_words_count, weight);
 	}
 
+	static inline int GetMinValueIndex(const int* positions, const vector<TOccurences>& occurences) {
+		int minValueIndex = -1;
+		for (TWordIndex index = 0; index < occurences.size(); ++index) {
+			if (occurences[index].size() <= positions[index] + 1) {
+				continue;
+			}
+			if (minValueIndex == -1 || occurences[index][positions[index]] < occurences[minValueIndex][positions[minValueIndex]]) {
+				minValueIndex = index;
+			}
+		}
+		return minValueIndex;
+	}
+
 	void ConstructMatches(const vector<TOccurences>& occurences,
 					      const int* localIndex2KeyIndex,
 						  const unsigned long long* keyIndex2freq,
@@ -280,7 +346,31 @@ public:
 						  const unordered_set<TObjectId>* objects2ConsiderPtr,
 						  vector<TSegmentMatches>* segmentMatchesPtr) {
 		vector<TSegmentMatches>& segmentMatches = *segmentMatchesPtr;
-
+		// only one word
+		if (occurences.size() == 1) {
+		    long long prevSegmentId = -1;
+		    for (int position = 0; position < occurences[0].size(); ++position) {
+			const TOccurence occurence = occurences[0][position];
+			const TSegmentId segmentId = GetSegmentId(occurence);
+			if (segmentId == prevSegmentId) {
+			    continue;
+			}
+			prevSegmentId = segmentId;
+			const TObjectId objectId = GetObjectId(occurence);
+			const TPosition positionInSegment = GetSegmentPosition(occurence);
+			const TWeight occWeight = GetWeight(occurence);
+			if (objects2ConsiderPtr != NULL &&
+						objects2ConsiderPtr->find(objectId) == objects2ConsiderPtr->end()) {
+				continue;
+			}
+			const TPositionAndWeight posAndWeight = occWeight + (positionInSegment << WEIGHT_BITS);
+			const TPosWeightWithWIndex posWeightWIndex = TPosWeightWithWIndex(posAndWeight, localIndex2KeyIndex[0]);
+			segmentMatches.push_back(TSegmentMatches(segmentId, objectId));
+			segmentMatches.rbegin()->SegmentOccurences.push_back(posWeightWIndex);
+		    }
+		    return;
+		}
+		// more than one word 
 		int positions[MAX_WORDS4QUERY]{0};
 		int iter = 0;
 		while (true) {
@@ -319,7 +409,7 @@ public:
 			}
 			++positions[toIncrease];
 		}
-		//cout << "results: " << segmentMatches.size() << "\n";
+		cout << "results: " << segmentMatches.size() << "\n";
 	}
 
 	string ExecuteQuery(const vector<TKey>& keys,
@@ -330,6 +420,10 @@ public:
 		int localIndex2KeyIndex[MAX_WORDS4QUERY] = { -1 };
 		unsigned long long keyIndex2offset[MAX_WORDS4QUERY] = { 0 };
 		unsigned long long keyIndex2freq[MAX_WORDS4QUERY] = { 0 };
+
+
+
+                TTime startTime = GetTime();
 
 		vector< pair<unsigned long long, int> > freqAndKeyIndex;
 		//upload freqs and offsets
@@ -352,16 +446,19 @@ public:
 		unsigned long long accumulFreq = 0;
 		double maxPossibleMatchWeight = 0.0;
 		int keys2consider = 0;
-		for (keys2consider = 0; keys2consider < min(MAX_WORDS4QUERY, (int)keys.size()); ++keys2consider) {
+		for (keys2consider = 0; keys2consider < min(MAX_KEYS2CONSIDER, (int)keys.size()); ++keys2consider) {
 			localIndex2KeyIndex[keys2consider] = freqAndKeyIndex[keys2consider].second;
 			accumulFreq += freqAndKeyIndex[keys2consider].first;
 			maxPossibleMatchWeight += Freq2IdfFreq(freqAndKeyIndex[keys2consider].first);
 			if (accumulFreq > MAX_OCCURENCES_IN_TOTAL) {
 				break;
 			}
-			//cout << "selected: " << keys[localIndex2KeyIndex[keys2consider]] << "\n";
+			cout << "selected: " << keys[localIndex2KeyIndex[keys2consider]] << "\n";
 		}
 		const double minMatchWeight2Consider = maxPossibleMatchWeight * CRUDE_FILTER_TRIM_PROPORTION;
+
+		cout << "\nselect keys: " << GetElapsedInSeconds(startTime, GetTime());
+		startTime = GetTime(); 
 
 		//upload occurences
 		//TODO: m
@@ -372,6 +469,10 @@ public:
 		    fread(&(*keysOccurences.rbegin())[0], sizeof(unsigned long long), keyIndex2freq[keyIndex], OccurencesFilePtr);
 		    //cout << "test: " << *(keysOccurences.rbegin()->rbegin()) << " size: " << keysOccurences.rbegin()->size() << "\n";
 		}
+
+		cout << "\nupload occs : " << GetElapsedInSeconds(startTime, GetTime());
+		startTime = GetTime(); 
+
 		vector<TSegmentMatches> segmentMatches;
 		ConstructMatches(keysOccurences,
 							&localIndex2KeyIndex[0],
@@ -380,26 +481,47 @@ public:
 							objects2ConsiderPtr,
 							&segmentMatches);
 
+
+		cout << "\nconstruct matches : " << GetElapsedInSeconds(startTime, GetTime());
+		startTime = GetTime(); 
+
 		unordered_map<TObjectId, double> objectWeights;
+		unordered_map<TObjectId, double> objectMatchesCount;
+		unordered_map<TObjectId, double> objectMaxMatchWeight;
 		vector< pair<double, TObjectId> > objectsRanking;
 		{
 
 			for (int occIndex = 0; occIndex < segmentMatches.size(); ++occIndex) {
-				double weight = SegmentMatchSimpleWeight(segmentMatches[occIndex], &keyIndex2freq[0]);
+				double weight = SegmentMatchSimpleWeight1(segmentMatches[occIndex], &keyIndex2freq[0]);
 				TObjectId object = segmentMatches[occIndex].Object;
 				if (objectWeights.find(object) == objectWeights.end()) {
 					objectWeights[object] = weight;
+					objectMatchesCount[object] = 1;
+					objectMaxMatchWeight[object] = weight;
 				} else {
 					objectWeights[object] += weight;
+					++objectMatchesCount[object];
+					objectMaxMatchWeight[object] = max(objectMaxMatchWeight[object], weight);
 				}
 			}
+
+
 			for (auto objectWeightIter = objectWeights.begin();
 										 objectWeightIter != objectWeights.end();
 										 ++objectWeightIter) {
-				objectsRanking.push_back( pair<double, TObjectId>(objectWeightIter->second, objectWeightIter->first) );
+			        // correct: obj.weight = max. weight * log(matches_count)
+				double matches_count = objectMatchesCount[objectWeightIter->first];
+				double max_weight = objectMaxMatchWeight[objectWeightIter->first];
+				double avg_score = objectWeightIter->second / matches_count;
+				double normalized_score = max_weight + avg_score * log(1.0 + matches_count) / 1000000;
+				objectsRanking.push_back( pair<double, TObjectId>(normalized_score, objectWeightIter->first) );
 			}
 			sort(objectsRanking.begin(), objectsRanking.end(), std::greater<pair<double, TObjectId> >());
 		}
+
+		cout << "\nobjects ranking : " << GetElapsedInSeconds(startTime, GetTime());
+		startTime = GetTime(); 
+
 
 		typedef pair<int, double> TSegmentRelevance;
 		typedef pair<TSegmentRelevance, int> TSegmentRelevanceAndIndex;
@@ -432,6 +554,10 @@ public:
 			}
 		}
 
+		cout << "\ntop segments of selected objects: " << GetElapsedInSeconds(startTime, GetTime());
+		startTime = GetTime(); 
+
+
 		//dump
 		string matchesDump = std::to_string(objectsRanking.size()) + "<:::>";
 		for (int object_index = firstResult2Return;
@@ -460,6 +586,11 @@ public:
 			}
 			matchesDump += "<:::>";
 		}
+
+		cout << "\ndump: " << GetElapsedInSeconds(startTime, GetTime());
+		cout.flush();
+		startTime = GetTime(); 
+
 		return matchesDump;
 	}
 
