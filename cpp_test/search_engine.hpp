@@ -422,6 +422,7 @@ public:
 		unsigned long long keyIndex2freq[MAX_WORDS4QUERY] = { 0 };
 
 
+		const unsigned long long MAX_OCCURENCES_IN_TOTAL = 50000000; //50mln
 
                 TTime startTime = GetTime();
 
@@ -430,34 +431,32 @@ public:
 		for (int keyIndex = 0; keyIndex < min(MAX_WORDS4QUERY, (int)keys.size()); ++keyIndex) {
 			const TKey& key = keys[keyIndex];
 			if ((*Key2FreqAndLocationPtr).find(key) == (*Key2FreqAndLocationPtr).end()) {
-				continue;
+			    continue;
 			}
 			unsigned long long keyFreq = (*Key2FreqAndLocationPtr)[key].first;
 			unsigned long long offset = (*Key2FreqAndLocationPtr)[key].second;
 			freqAndKeyIndex.push_back(pair<unsigned long long, int>(keyFreq, keyIndex));
-			//cout << "freqs: " << keys[keyIndex] << ",  " << keyFreq << "\n";
 			keyIndex2freq[keyIndex] = keyFreq;
 			keyIndex2offset[keyIndex] = offset;
 		}
 		sort(freqAndKeyIndex.begin(), freqAndKeyIndex.end());
 
 		//choose cut
-		const unsigned long long MAX_OCCURENCES_IN_TOTAL = 50000000; //50mln
 		unsigned long long accumulFreq = 0;
 		double maxPossibleMatchWeight = 0.0;
 		int keys2consider = 0;
-		for (keys2consider = 0; keys2consider < min(MAX_KEYS2CONSIDER, (int)keys.size()); ++keys2consider) {
+		for (keys2consider = 0; keys2consider < min(MAX_KEYS2CONSIDER, (int)freqAndKeyIndex.size()); ++keys2consider) {
 			localIndex2KeyIndex[keys2consider] = freqAndKeyIndex[keys2consider].second;
 			accumulFreq += freqAndKeyIndex[keys2consider].first;
 			maxPossibleMatchWeight += Freq2IdfFreq(freqAndKeyIndex[keys2consider].first);
 			if (accumulFreq > MAX_OCCURENCES_IN_TOTAL) {
 				break;
 			}
-			cout << "selected: " << keys[localIndex2KeyIndex[keys2consider]] << "\n";
 		}
 		const double minMatchWeight2Consider = maxPossibleMatchWeight * CRUDE_FILTER_TRIM_PROPORTION;
 
-		cout << "\nselect keys: " << GetElapsedInSeconds(startTime, GetTime());
+		cout << "select keys: " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
+		cout.flush();
 		startTime = GetTime(); 
 
 		//upload occurences
@@ -470,7 +469,7 @@ public:
 		    //cout << "test: " << *(keysOccurences.rbegin()->rbegin()) << " size: " << keysOccurences.rbegin()->size() << "\n";
 		}
 
-		cout << "\nupload occs : " << GetElapsedInSeconds(startTime, GetTime());
+		cout << "upload occs : " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
 		startTime = GetTime(); 
 
 		vector<TSegmentMatches> segmentMatches;
@@ -482,7 +481,7 @@ public:
 							&segmentMatches);
 
 
-		cout << "\nconstruct matches : " << GetElapsedInSeconds(startTime, GetTime());
+		cout << "construct matches : " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
 		startTime = GetTime(); 
 
 		unordered_map<TObjectId, double> objectWeights;
@@ -519,7 +518,7 @@ public:
 			sort(objectsRanking.begin(), objectsRanking.end(), std::greater<pair<double, TObjectId> >());
 		}
 
-		cout << "\nobjects ranking : " << GetElapsedInSeconds(startTime, GetTime());
+		cout << "objects ranking : " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
 		startTime = GetTime(); 
 
 
@@ -554,7 +553,7 @@ public:
 			}
 		}
 
-		cout << "\ntop segments of selected objects: " << GetElapsedInSeconds(startTime, GetTime());
+		cout << "top segments of selected objects: " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
 		startTime = GetTime(); 
 
 
@@ -587,7 +586,7 @@ public:
 			matchesDump += "<:::>";
 		}
 
-		cout << "\ndump: " << GetElapsedInSeconds(startTime, GetTime());
+		cout << "dump: " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
 		cout.flush();
 		startTime = GetTime(); 
 

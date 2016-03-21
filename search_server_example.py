@@ -87,7 +87,6 @@ class TSearchServer():
         
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
 
-"""
 port = int(sys.argv[1])
 books_folder = sys.argv[2]
 pages_index_folder = sys.argv[3]
@@ -99,6 +98,7 @@ books_folder = "/home/arslan/src/ngpedia/books1000"
 pages_index_folder ="indices/"
 csv_path = "/home/arslan/src/ngpedia/search_system/books.csv"
 cfields_index_folder = "/home/arslan/src/ngpedia/search_system/custom_fields_indices/"
+"""
 
 
 
@@ -199,7 +199,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                          "pages count" : book_info.pages_count, "lib_sections" : book_info.lib_sections }
             
             top_segments = []
-            for segment_match_index in xrange( min(3, len(result.segment_matches)) ):
+            for segment_match_index in xrange( min(1, len(result.segment_matches)) ):
                 segment_match = result.segment_matches[-segment_match_index - 1]
                 obj_id_str, field_id, snippet_encoded = server.get_pages_segment_data(segment_match.id)
                 book_data["id"] = obj_id_str
