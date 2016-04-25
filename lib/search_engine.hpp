@@ -10,12 +10,29 @@
 #include <memory>
 #include <sstream>
 #include <math.h>
-#include "time_routines.hpp"
 #include <queue>
 #include <math.h>
+#include <chrono>
 
 using namespace std;
 
+const unsigned short OBJ_BITS = 20;
+const unsigned short SEGMENT_POS_BITS = 6;
+const unsigned short WEIGHT_BITS = 2;
+const unsigned short NON_SEGMENT_BITS = SEGMENT_POS_BITS + WEIGHT_BITS + OBJ_BITS;
+
+const int MAX_SEGMENTS_PER_OBJECT = 10;
+
+const char* KEY2OFFSETS_FILE = "main_index_keys.db.txt";
+const char* OCCURENCES_FILE = "main_index_values.pickle";
+const int MAX_WORDS4QUERY = 10;
+const int MAX_KEYS2CONSIDER = 5;
+const double CRUDE_FILTER_TRIM_PROPORTION = 0.5;
+const int MAX_OCCURENCES2RETURN = 10000;
+
+
+class TSearchIndex {
+private:
 typedef unsigned long TSegmentId;
 typedef unsigned short TPosition;
 typedef unsigned short TWeight;
@@ -28,14 +45,11 @@ typedef std::pair<TPositionAndWeight, TWordIndex> TPosWeightWithWIndex;
 typedef unsigned long long TOccurence;
 typedef vector<TOccurence> TOccurences;
 
+typedef pair<unsigned int, unsigned long long> TFreqAndLocation;
+typedef string TKey;
 
-const unsigned short OBJ_BITS = 20;
-const unsigned short SEGMENT_POS_BITS = 6;
-const unsigned short WEIGHT_BITS = 2;
-const unsigned short NON_SEGMENT_BITS = SEGMENT_POS_BITS + WEIGHT_BITS + OBJ_BITS;
-
-const int MAX_SEGMENTS_PER_OBJECT = 10;
-
+    auto_ptr<unordered_map<TKey, TFreqAndLocation> > Key2FreqAndLocationPtr;
+    FILE* OccurencesFilePtr;
 
 struct TSegmentMatches {
     TSegmentId Segment;
@@ -48,25 +62,27 @@ struct TSegmentMatches {
     }
 };
 
+static char* strdup(const char* org) {
+    if (org == NULL) return NULL;
+    char* newstr = (char*)malloc(strlen(org)+1);
+    newstr[strlen(org)] = '\0';
+    char* p;
+    if (newstr == NULL) return NULL;
+    p = newstr;
+    while(*org) *p++ = *org++; /* copy the string. */
+    return newstr;
+}
 
-const string KEY2OFFSETS_FILE = "main_index_keys.db.txt";
-const string OCCURENCES_FILE = "main_index_values.pickle";
-const int MAX_WORDS4QUERY = 10;
-const int MAX_KEYS2CONSIDER = 5;
-const double CRUDE_FILTER_TRIM_PROPORTION = 0.5;
-const int MAX_OCCURENCES2RETURN = 10000;
 
+    //typedef std::chrono::time_point<std::chrono::system_clock> TTime;
+    //static inline TTime GetTime() {
+    //    return std::chrono::system_clock::now();
+    //}
 
-
-
-class TSearchIndex {
-private:
-	typedef pair<unsigned int, unsigned long long> TFreqAndLocation;
-	typedef string TKey;
-
-	auto_ptr<unordered_map<TKey, TFreqAndLocation> > Key2FreqAndLocationPtr;
-    FILE* OccurencesFilePtr;
-
+    //static inline double GetElapsedInSeconds(TTime start, TTime end) {
+    //    std::chrono::duration<double> elapsed = end - start;
+    //    return elapsed.count();
+    //}
 
     static inline TSegmentId GetSegmentId(TOccurence occurence) {
         return occurence >> NON_SEGMENT_BITS;
@@ -84,13 +100,11 @@ private:
     int TmpBufferPosition2KeyIndex[(1 << SEGMENT_POS_BITS) + 1];
     int TmpBufferCountsInside[MAX_WORDS4QUERY];
 public:
-
-
-	TSearchIndex(const string& indexLocation)
+	TSearchIndex(const char* indexLocation)
 				: Key2FreqAndLocationPtr(new unordered_map<TKey, TFreqAndLocation>())
 	{
 		{//upload key -> (freq, offset)
-		    ifstream file(indexLocation + "/" + KEY2OFFSETS_FILE);
+		    ifstream file(string(indexLocation) + "/" + string(KEY2OFFSETS_FILE));
 		    if (!file.is_open()) {
 		    	return;
 		    }
@@ -110,7 +124,7 @@ public:
 		    }
 		}
 		//occurences file
-		OccurencesFilePtr = fopen((indexLocation + "/" + OCCURENCES_FILE).c_str(), "rb");
+		OccurencesFilePtr = fopen((string(indexLocation) + "/" + string(OCCURENCES_FILE)).c_str(), "rb");
 	}
 
 	~TSearchIndex() {
@@ -119,7 +133,7 @@ public:
 		}
 	}
 
-
+private:
 	static inline double Freq2IdfFreq(unsigned long long freq) {
 		return 1.0 / log(freq + 2.0);
 	}
@@ -128,7 +142,7 @@ public:
 						       const unsigned long long* keyIndex2freq) const {
 	        unsigned long long seen = 0;
 	    	double weight = 0.0;
-    		for (int occIndex = 0; occIndex < match.SegmentOccurences.size(); ++occIndex) {
+    		for (int occIndex = 0; occIndex < (int)match.SegmentOccurences.size(); ++occIndex) {
 		    int keyIndex = match.SegmentOccurences.at(occIndex).second;
 		    if (!(seen & (1 << keyIndex))) {
 			seen += (1 << keyIndex);
@@ -159,15 +173,11 @@ public:
 		        }
 		}
 		sort(&TmpBufferPositions[0], &TmpBufferPositions[0] + bufferEnd);
-	        int shortest_span_start = -1;
-		int shortest_span_end = -1;
 		int shortest_span_len = -1;
 		{
 
 			int start = 0;
 			int end = 1;
-			shortest_span_start = start;
-			shortest_span_end = end;
 			shortest_span_len = -1;
 			++TmpBufferCountsInside[TmpBufferPosition2KeyIndex[TmpBufferPositions[start]]];
 			int uniqInside = 1;
@@ -184,8 +194,6 @@ public:
 				}
 				int span_len = TmpBufferPositions[end - 1] - TmpBufferPositions[start] + 1;
 				if (shortest_span_len == -1 || span_len < shortest_span_len) {
-					shortest_span_start = start;
-					shortest_span_end = end;
 					shortest_span_len = span_len;
 				}
 				if (TmpBufferCountsInside[TmpBufferPosition2KeyIndex[TmpBufferPositions[start]]] == 1) {
@@ -215,8 +223,8 @@ public:
 		int countsInside[MAX_WORDS4QUERY]{0};
 		++countsInside[match.SegmentOccurences[start].second];
 		int uniqInside = 1;
-		while (start < match.SegmentOccurences.size()) {
-			while (end < match.SegmentOccurences.size() && uniqInside < uniqTokensCount) {
+		while (start < (int)match.SegmentOccurences.size()) {
+			while (end < (int)match.SegmentOccurences.size() && uniqInside < uniqTokensCount) {
 				if (countsInside[match.SegmentOccurences[end].second] == 0) {
 					++uniqInside;
 				}
@@ -300,7 +308,7 @@ public:
 			*/
 			int totalBigrams = tokensInQuery - 1;
 			int bigramsInMatch = 0;
-			for (int occurenceIndex = 0; occurenceIndex < match.SegmentOccurences.size() - 1; ++occurenceIndex) {
+			for (int occurenceIndex = 0; occurenceIndex < (int)match.SegmentOccurences.size() - 1; ++occurenceIndex) {
 				int firstKeyId = match.SegmentOccurences[occurenceIndex].second;
 				int secondKeyId = match.SegmentOccurences[occurenceIndex + 1].second;
 				if (secondKeyId - firstKeyId == 1) {
@@ -329,7 +337,7 @@ public:
 	static inline int GetMinValueIndex(const int* positions, const vector<TOccurences>& occurences) {
 		int minValueIndex = -1;
 		for (TWordIndex index = 0; index < occurences.size(); ++index) {
-			if (occurences[index].size() <= positions[index] + 1) {
+			if ((int)occurences[index].size() <= positions[index] + 1) {
 				continue;
 			}
 			if (minValueIndex == -1 || occurences[index][positions[index]] < occurences[minValueIndex][positions[minValueIndex]]) {
@@ -349,10 +357,10 @@ public:
 		// only one word
 		if (occurences.size() == 1) {
 		    long long prevSegmentId = -1;
-		    for (int position = 0; position < occurences[0].size(); ++position) {
+		    for (int position = 0; position < (int)occurences[0].size(); ++position) {
 			const TOccurence occurence = occurences[0][position];
 			const TSegmentId segmentId = GetSegmentId(occurence);
-			if (segmentId == prevSegmentId) {
+			if ((long long)segmentId == prevSegmentId) {
 			    continue;
 			}
 			prevSegmentId = segmentId;
@@ -409,9 +417,28 @@ public:
 			}
 			++positions[toIncrease];
 		}
-		cout << "results: " << segmentMatches.size() << "\n";
 	}
 
+vector<string> SplitString(const string& sourceString, const string& delimiter, bool dropEmptyChunks = true) {
+	vector<string> out;
+	int startPos = 0;
+	while (true) {
+		int delimPos = sourceString.find(delimiter, startPos);
+		if (delimPos == string::npos) {
+			break;
+		}
+		if (delimPos != startPos || !dropEmptyChunks) {
+			out.push_back(sourceString.substr(startPos, delimPos - startPos));
+		}
+		startPos = delimPos + delimiter.size();
+	}
+	if (startPos != sourceString.size() || !dropEmptyChunks) {
+		out.push_back(sourceString.substr(startPos, sourceString.size() - startPos));
+	}
+	return out;
+}
+
+//public:
 	string ExecuteQuery(const vector<TKey>& keys,
 						const int firstResult2Return,
 						const int results2Return,
@@ -424,7 +451,7 @@ public:
 
 		const unsigned long long MAX_OCCURENCES_IN_TOTAL = 50000000; //50mln
 
-                TTime startTime = GetTime();
+                //TTime startTime = GetTime();
 
 		vector< pair<unsigned long long, int> > freqAndKeyIndex;
 		//upload freqs and offsets
@@ -440,7 +467,6 @@ public:
 			keyIndex2offset[keyIndex] = offset;
 		}
 		sort(freqAndKeyIndex.begin(), freqAndKeyIndex.end());
-
 		//choose cut
 		unsigned long long accumulFreq = 0;
 		double maxPossibleMatchWeight = 0.0;
@@ -454,11 +480,9 @@ public:
 			}
 		}
 		const double minMatchWeight2Consider = maxPossibleMatchWeight * CRUDE_FILTER_TRIM_PROPORTION;
-
-		cout << "select keys: " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
-		cout.flush();
-		startTime = GetTime(); 
-
+		//cout << "select keys: " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
+		//cout.flush();
+		//startTime = GetTime(); 
 		//upload occurences
 		//TODO: m
 		for (int localKeyIndex = 0; localKeyIndex < keys2consider; ++localKeyIndex) {
@@ -469,8 +493,8 @@ public:
 		    //cout << "test: " << *(keysOccurences.rbegin()->rbegin()) << " size: " << keysOccurences.rbegin()->size() << "\n";
 		}
 
-		cout << "upload occs : " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
-		startTime = GetTime(); 
+		//cout << "upload occs : " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
+		//startTime = GetTime(); 
 
 		vector<TSegmentMatches> segmentMatches;
 		ConstructMatches(keysOccurences,
@@ -480,9 +504,8 @@ public:
 							objects2ConsiderPtr,
 							&segmentMatches);
 
-
-		cout << "construct matches : " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
-		startTime = GetTime(); 
+		//cout << "construct matches : " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
+		//startTime = GetTime(); 
 
 		unordered_map<TObjectId, double> objectWeights;
 		unordered_map<TObjectId, double> objectMatchesCount;
@@ -490,7 +513,7 @@ public:
 		vector< pair<double, TObjectId> > objectsRanking;
 		{
 
-			for (int occIndex = 0; occIndex < segmentMatches.size(); ++occIndex) {
+			for (int occIndex = 0; occIndex < (int)segmentMatches.size(); ++occIndex) {
 				double weight = SegmentMatchSimpleWeight1(segmentMatches[occIndex], &keyIndex2freq[0]);
 				TObjectId object = segmentMatches[occIndex].Object;
 				if (objectWeights.find(object) == objectWeights.end()) {
@@ -518,8 +541,8 @@ public:
 			sort(objectsRanking.begin(), objectsRanking.end(), std::greater<pair<double, TObjectId> >());
 		}
 
-		cout << "objects ranking : " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
-		startTime = GetTime(); 
+		//cout << "objects ranking : " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
+		//startTime = GetTime(); 
 
 
 		typedef pair<int, double> TSegmentRelevance;
@@ -537,7 +560,7 @@ public:
 		}
 
 		if (selectedObjectsBestMatches.size() > 0) {//select top matches for the selected objects
-			for (int occIndex = 0; occIndex < segmentMatches.size(); ++occIndex) {
+			for (int occIndex = 0; occIndex < (int)segmentMatches.size(); ++occIndex) {
 				TObjectId objectId = segmentMatches[occIndex].Object;
 				if (selectedObjectsMatchesCount.find(objectId) == selectedObjectsMatchesCount.end()) {
 					continue;
@@ -553,8 +576,8 @@ public:
 			}
 		}
 
-		cout << "top segments of selected objects: " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
-		startTime = GetTime(); 
+		//cout << "top segments of selected objects: " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
+		//startTime = GetTime(); 
 
 
 		//dump
@@ -586,13 +609,32 @@ public:
 			matchesDump += "<:::>";
 		}
 
-		cout << "dump: " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
-		cout.flush();
-		startTime = GetTime(); 
+		//cout << "dump: " << GetElapsedInSeconds(startTime, GetTime()) << "\n";
+		//cout.flush();
+		//startTime = GetTime(); 
 
 		return matchesDump;
 	}
-
+public:
+	char* ExecuteQuery(const char* keysStr,
+			    const int firstResult2Return,
+		            const int results2Return,
+			    const char* objectsStr) {
+	       string delimiter = "<>";
+	       vector<TKey> keys = SplitString(string(keysStr), delimiter);
+	       vector<string> objects2considerAsStrings = SplitString(string(objectsStr), delimiter);
+	       unordered_set<TObjectId> objects2consider;
+	       for (auto iter = objects2considerAsStrings.begin(); iter != objects2considerAsStrings.end(); ++iter) {
+		    objects2consider.insert(strtol(iter->c_str(), NULL, 10));
+	       }
+	       string output;
+	       if (objects2consider.size() > 0) {
+		   output = ExecuteQuery(keys, firstResult2Return, results2Return, &objects2consider);
+	       } else {
+	           output = ExecuteQuery(keys, firstResult2Return, results2Return, NULL);
+	       }
+	       return strdup(output.c_str());
+	}
 };
 
 
