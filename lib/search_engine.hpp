@@ -21,7 +21,7 @@ const unsigned short SEGMENT_POS_BITS = 6;
 const unsigned short WEIGHT_BITS = 2;
 const unsigned short NON_SEGMENT_BITS = SEGMENT_POS_BITS + WEIGHT_BITS + OBJ_BITS;
 
-const int MAX_SEGMENTS_PER_OBJECT = 10;
+const int MAX_SEGMENTS_PER_OBJECT = 100;
 
 const char* KEY2OFFSETS_FILE = "main_index_keys.db.txt";
 const char* OCCURENCES_FILE = "main_index_values.pickle";

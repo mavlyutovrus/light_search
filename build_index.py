@@ -1,10 +1,11 @@
-from lib.search_engine import TSearchEngine
-from lib.utils import TCustomCounter
 from lib.build_index_map import build_index_map
 from lib.build_index_reduce import reduce
 from datetime import datetime
 import sys
-import os
+
+if len(sys.argv) < 4:
+    print "params: <books_dir> <folder for intermediate results <folder where to put indices>"
+    exit()
 
 books_dir = sys.argv[1]
 intermid_results_dir = sys.argv[2]

@@ -1,12 +1,12 @@
 #-*- coding:utf8 -*-
-from lib.crawler import TCrawler
-from lib.search_engine import TSearchEngine
+from crawler import TCrawler
+#from search_engine import TSearchEngine
 from segments_index import TSegmentIndexWriter
-from lib.utils import TCustomCounter
-from lib.ling_utils import TTokenMatch
-from lib.ling_utils import CASE_UPPER, CASE_TITLE, CASE_LOWER
-from lib.ling_utils import span_tokenize_windows1251
-from lib.ling_utils import unify_word
+from utils import TCustomCounter
+#from ling_utils import TTokenMatch
+from ling_utils import CASE_UPPER, CASE_TITLE, CASE_LOWER
+from ling_utils import span_tokenize_windows1251
+from ling_utils import unify_word
 import sys
 import os
 

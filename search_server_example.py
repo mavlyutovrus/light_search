@@ -1,13 +1,14 @@
 #-*- coding:utf8 -*-
 import BaseHTTPServer
+import os
 import sys
 import socket
 from lib.crawler import TCrawler, LIB_SECTION_FIELD
 from lib.custom_fields_search_engine import TCustomFieldsSearchEngine
-from lib.custom_fields_search_engine import TBook
+#from lib.custom_fields_search_engine import TBook
 from lib.search_engine import TSearchEngine
 
-from scipy.constants.constants import year
+#from scipy.constants.constants import year
 
 class TSearchServer():
     def __init__(self, books_folder, pages_index_folder, csv_path, cfields_index_folder):
@@ -56,7 +57,6 @@ class TSearchServer():
                                                                        pages_count_max=params["pages_count_max"],
                                                                        pages_count_min=params["pages_count_min"],
                                                                        lib_section=params["filter_lib_section"])
-        
         #no books satisfying filters
         if filtered_object_ids == -1:
             return EMPTY_RESPONSE        
@@ -69,7 +69,7 @@ class TSearchServer():
                 filtered_object_ids = [filter_object_id]
             else:
                 return EMPTY_RESPONSE
-        
+
         if filtered_object_ids == 0: #all books are accepted
             filtered_object_ids = None
             
@@ -78,29 +78,29 @@ class TSearchServer():
         
         if not params["pages_query"]:# no query to the pages index
             return EMPTY_RESPONSE
-        
+
         results, total_results_count = self.pages_search_engine.search(query=params["pages_query"],
                                                                       filter_objects=filtered_object_ids,
                                                                       first_object2return=params["start"],
-                                                                      objects2return=params["len"] )
+                                                                      objects2return=params["len"])
         return results, total_results_count
         
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
 
-port = int(sys.argv[1])
-books_folder = sys.argv[2]
-pages_index_folder = sys.argv[3]
-csv_path = sys.argv[4]
-cfields_index_folder = sys.argv[5]
-"""
-port = 8334
-books_folder = "/home/arslan/src/ngpedia/books1000"
-pages_index_folder ="indices/"
-csv_path = "/home/arslan/src/ngpedia/search_system/books.csv"
-cfields_index_folder = "/home/arslan/src/ngpedia/search_system/custom_fields_indices/"
-"""
-
-
+if os.getcwd() == "/home/arslan/src/light_search":
+    port = 8334
+    books_folder = "/home/arslan/src/ngpedia/books_sample/"
+    pages_index_folder = "/home/arslan/src/ngpedia/indices/"
+    csv_path = "/home/arslan/src/ngpedia/books.csv"
+    cfields_index_folder = "/home/arslan/src/ngpedia/search_system/custom_fields_indices/"
+else:
+    if len(sys.argv) < 5:
+        print "launch params: <port to serve> <books folder> <index folder> <books.csv location>"
+        exit()
+    port = int(sys.argv[1])
+    books_folder = sys.argv[2]
+    pages_index_folder = sys.argv[3]
+    csv_path = sys.argv[4]
 
 
 server = TSearchServer(books_folder=books_folder, 
@@ -152,13 +152,14 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                                      "pages_count":"NONE",
                                      "pages_count_max":"max_pcount",
                                      "pages_count_min":"min_pcount",
+                                     "snippets_per_object": "snps",
                                      "json" : "json"}
         integer_params = ["start", "len", 
                           "filter_object_id", "filter_lib_section", 
                           "year", "year_min", "year_max", 
-                          "pages_count", "pages_count_max","pages_count_min"]
+                          "pages_count", "pages_count_max","pages_count_min", "snippets_per_object"]
         
-        default_values = {"start" : 0, "len" : 10, "add" : "author, title", "filter_object_id":None}
+        default_values = {"start" : 0, "len" : 10, "add" : "author, title", "filter_object_id":None, "snippets_per_object": 1}
         
         params = {} 
         for key, query_param in internal_key2query_param.items():
@@ -181,11 +182,11 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         full_query = self.path
         full_query = full_query.replace("?callback=", "&callback=")
         query_params = self.parse_query(full_query)
-              
+
+        snippets_per_object = query_params["snippets_per_object"]
         match_objects, total_relevant_objects = server.search(query_params)
         if match_objects == -1:
             match_objects = []
-         
         response_object = {}
         response_object["count"] = total_relevant_objects
         response_elems = []
@@ -199,7 +200,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                          "pages count" : book_info.pages_count, "lib_sections" : book_info.lib_sections }
             
             top_segments = []
-            for segment_match_index in xrange( min(1, len(result.segment_matches)) ):
+            for segment_match_index in xrange(min(snippets_per_object, len(result.segment_matches))):
                 segment_match = result.segment_matches[-segment_match_index - 1]
                 obj_id_str, field_id, snippet_encoded = server.get_pages_segment_data(segment_match.id)
                 book_data["id"] = obj_id_str

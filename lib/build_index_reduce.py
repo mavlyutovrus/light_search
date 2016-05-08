@@ -1,10 +1,10 @@
-from segments_index import TSegmentIndexWriter
-from lib.search_engine import TSearchEngine
+#from segments_index import TSegmentIndexWriter
+#from lib.search_engine import TSearchEngine
 from utils import TCustomCounter
-from pybloom.pybloom import BloomFilter
+#from pybloom.pybloom import BloomFilter
 import pickle
-import numpy
-import shelve
+#import numpy
+#import shelve
 import os
 import sys
 from struct import *
@@ -114,7 +114,7 @@ def reduce(intermid_results_dir,indices_dir, log_out):
     index_values_fname = os.path.join(indices_dir, "main_index_values.pickle")
     index_keys_fname =  os.path.join(indices_dir, "main_index_keys.db")
     index_values_file = open(index_values_fname, "wb", buffering=1000000)
-    index_keys_db = shelve.open(index_keys_fname, writeback=True)
+    #index_keys_db = shelve.open(index_keys_fname, writeback=True)
     index_keys_as_txt = open(index_keys_fname + ".txt", "w")
     
     for _, keys_fname, values_fname, _ in single_proc_tasks + mult_proc_tasks:
@@ -126,8 +126,8 @@ def reduce(intermid_results_dir,indices_dir, log_out):
         while keys_file.tell() < keys_file_size:
             token, token_freq, start_position = pickle.load(keys_file)
             start_position += chunk_offset
-            index_keys_db[token] = (token_freq, start_position)
+            #index_keys_db[token] = (token_freq, start_position)
             index_keys_as_txt.write("%s %d %d\n" % (token, token_freq, start_position))
     index_values_file.close()
-    index_keys_db.close()
+    #index_keys_db.close()
     index_keys_as_txt.close()

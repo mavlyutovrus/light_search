@@ -1,5 +1,5 @@
-from lib.search_engine import TSearchEngine
-from lib.utils import TCustomCounter
+from search_engine import TSearchEngine
+from utils import TCustomCounter
 from lib.collect_bigrams_map import collect_bigrams_map
 from lib.collect_bigrams_reduce import collect_bigrams_reduce
 from datetime import datetime

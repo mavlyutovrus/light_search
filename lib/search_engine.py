@@ -29,34 +29,34 @@ class TSearchEngineResult(object):
 class TSearchEngine(object):
     SEGMENT_SIZE = 64
     #maximum amount to store in index, the rest is in the bloomfilter
-    SERVER_LOCATION = "http://5.9.104.49:8081/?q="
-    SERVER_LOCATION = "http://127.0.0.1:8080/?q="
+    #SERVER_LOCATION = "http://5.9.104.49:8081/?q="
+    #SERVER_LOCATION = "http://127.0.0.1:8080/?q="
     
     def __init__(self, index_location="./"):
         self.parsers = TParsersBundle()
-        self.word_index = TWordIndexReader(index_location)
+        #self.word_index = TWordIndexReader(index_location)
         self.segment_index = TSegmentIndexReader(index_location)
-	self.search_index = TSearchIndex("/books/indices/")
+        self.search_index = TSearchIndex(index_location)
     
     """ return list of TSearchEngineResult sorted by weights (high weight first) """
-    def search(self, query, filter_objects=None, query_tokens=[], first_object2return=0, objects2return=10, ):
+    def search(self, query, filter_objects=None, query_tokens=[], first_object2return=0, objects2return=10):
         if not query_tokens:
             if type(query) == unicode:
                 query = query.encode("utf8") 
             query_matches = self.parsers.parse_buffer(query)
             query_tokens = [match.token for match in query_matches]
-	objects_str = ""
+        objects_str = ""
         if  (filter_objects != None) and (len(filter_objects) > 0):
             objects_str = "<>".join(str(object_id) for object_id in filter_objects)
-	as_text = self.search_index.ExecuteQuery("<>".join(query_tokens), first_object2return, objects2return, objects_str);
-	"""
-        import urllib2
-        objects_suffix =""
-        if  (filter_objects != None) and (len(filter_objects) > 0):
-            objects_suffix = "&o=" + ",".join(str(object_id) for object_id in filter_objects)
-        start_len_suffix = "&start=" + str(first_object2return) + "&len=" + str(objects2return)            
-        as_text = urllib2.urlopen(TSearchEngine.SERVER_LOCATION + ",".join(query_tokens) + objects_suffix + start_len_suffix).read()
-	"""
+        as_text = self.search_index.ExecuteQuery("<>".join(query_tokens), first_object2return, objects2return, objects_str);
+        """
+            import urllib2
+            objects_suffix =""
+            if  (filter_objects != None) and (len(filter_objects) > 0):
+                objects_suffix = "&o=" + ",".join(str(object_id) for object_id in filter_objects)
+            start_len_suffix = "&start=" + str(first_object2return) + "&len=" + str(objects2return)
+            as_text = urllib2.urlopen(TSearchEngine.SERVER_LOCATION + ",".join(query_tokens) + objects_suffix + start_len_suffix).read()
+        """
         results = []
         chunks = [chunk.strip() for chunk in as_text.split("<:::>") if chunk.strip()]
         total_results_count = int(chunks[0])
