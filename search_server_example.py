@@ -11,7 +11,7 @@ from lib.search_engine import TSearchEngine
 #from scipy.constants.constants import year
 
 class TSearchServer():
-    def __init__(self, books_folder, pages_index_folder, csv_path, cfields_index_folder):
+    def __init__(self, books_folder, pages_index_folder, csv_path):
         self.books_folder = books_folder
         self.pages_index_folder = pages_index_folder
         self.csv_path = csv_path
@@ -92,7 +92,6 @@ if os.getcwd() == "/home/arslan/src/light_search":
     books_folder = "/home/arslan/src/ngpedia/books_sample/"
     pages_index_folder = "/home/arslan/src/ngpedia/indices/"
     csv_path = "/home/arslan/src/ngpedia/books.csv"
-    cfields_index_folder = "/home/arslan/src/ngpedia/search_system/custom_fields_indices/"
 else:
     if len(sys.argv) < 5:
         print "launch params: <port to serve> <books folder> <index folder> <books.csv location>"
@@ -105,8 +104,7 @@ else:
 
 server = TSearchServer(books_folder=books_folder, 
                        pages_index_folder=pages_index_folder, 
-                       csv_path=csv_path, 
-                       cfields_index_folder=cfields_index_folder)
+                       csv_path=csv_path) 
 
 """
 custom_fields_matches, pages_matches = server.search(u"или по также или не")
