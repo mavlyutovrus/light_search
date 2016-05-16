@@ -63,9 +63,9 @@ def generate_simple_referat(keyword, pages_search_engine, books_data_search_engi
 
 
 
-books_folder = "/home/arslan/src/ngpedia/books_sample/"
-pages_index_folder = "/home/arslan/src/ngpedia/indices/"
-csv_path = "/home/arslan/src/ngpedia/books.csv"
+books_folder = "/books/unpacked/txt/"
+pages_index_folder = "/books/indices/"
+csv_path = "/books/books.csv"
 pages_search_engine = TSearchEngine(index_location=pages_index_folder)
 books_data = TCustomFieldsSearchEngine(csv_path)
 
