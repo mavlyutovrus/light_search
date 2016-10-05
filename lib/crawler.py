@@ -55,11 +55,9 @@ class TCrawler(object):
         
         import sys
         processed_counter = TCustomCounter("Crawler, found objects", sys.stderr, self.verbosity, 1000)
-        encoding = ""
+        encoding = chardet.detect(open(csv_file_path).read())['encoding']
         all_hierarchy_codes = {}
         for line in open(csv_file_path):
-            if not encoding:
-                encoding = chardet.detect(line)['encoding']
             line = line.decode(encoding)
             field_values = line.strip().split(";")
             object_id = field_values[0]
