@@ -234,27 +234,51 @@ class TCustomFieldsSearchEngine(object):
                 return -1
         return cross_product
 
-                     
+    def find_mentions_of_author_and_title(self, query):
+        tokens = [unify_word(match[-1].decode("windows-1251")) \
+		    for match in span_tokenize_windows1251(query.encode("windows-1251"))[:10]]
+        tokens = set(tokens)
+        books_scores = {}
+        for token in tokens:
+            if token in self.title_index:
+                for obj_id in set(self.title_index[token]):
+                    books_scores.setdefault(obj_id, 0)
+                    books_scores[obj_id] += 1
+            if token in self.author_index: 
+                for obj_id in set(self.author_index[token]):
+                    books_scores.setdefault(obj_id, 0)
+                    books_scores[obj_id] += 1
+        import math
+        min_match = math.ceil(len(tokens) * 0.6)
+        matched_books = [(matched_tokens, book) for book, matched_tokens in books_scores.items() \
+		                                      if matched_tokens >= min_match]
+        matched_books.sort(reverse=True)
+        matched_books = [book for _, book in matched_books]
+        return matched_books
     
-"""
-print "start"
-index = TCustomFieldsSearchEngine("/home/arslan/src/ngpedia/search_system/books.csv")
-print "uploaded", len(index.objects)
-
-import datetime
-print "query"
-start = datetime.datetime.now()
-objects = index.process_query(author=u"юрьева")
-
-print len(objects), (datetime.datetime.now() - start)
-if 1:
-    for object_id in objects:
-        title = index.objects[object_id].title
-        author = index.objects[object_id].author    
-        udc = index.objects[object_id].udc        
-        year = index.objects[object_id].year    
-        pages_count = index.objects[object_id].pages_count
-        lib_sections = index.objects[object_id].lib_sections
-                          
-        print author.decode("windows-1251"), "||", title.decode("windows-1251"), "||", udc, "||", year, "||", pages_count, "||", lib_sections
-"""
+if __name__ == "__main__":
+	print "start"
+        import sys
+	import datetime
+        path = sys.argv[1];
+        print path
+	print "uploading"
+	start = datetime.datetime.now()
+	index = TCustomFieldsSearchEngine(path)
+	print "uploaded", len(index.objects), (datetime.datetime.now() - start)
+	print "query"
+	start = datetime.datetime.now()
+	#objects = index.process_query(author=u"юрьева")
+        objects = index.find_mention_of_author_and_titles(u"нефтехимия миронов")
+	print len(objects), (datetime.datetime.now() - start)
+	if 1:
+	    for object_id in objects:
+	        title = index.objects[object_id].title
+	        author = index.objects[object_id].author    
+	        udc = index.objects[object_id].udc        
+	        year = index.objects[object_id].year    
+	        pages_count = index.objects[object_id].pages_count
+	        lib_sections = index.objects[object_id].lib_sections
+	        print author.decode("windows-1251"), title.decode("windows-1251")
+	        #print author.decode("windows-1251"), "||", title.decode("windows-1251")
+                #print author.decode("windows-1251"), "||", title.decode("windows-1251"), "||", udc, "||", year, "||", pages_count, "||", lib_sections

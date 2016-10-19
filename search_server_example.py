@@ -7,6 +7,7 @@ from lib.crawler import TCrawler, LIB_SECTION_FIELD
 from lib.custom_fields_search_engine import TCustomFieldsSearchEngine
 #from lib.custom_fields_search_engine import TBook
 from lib.search_engine import TSearchEngine
+from lib.search_engine import TSearchEngineResult
 
 #from scipy.constants.constants import year
 
@@ -79,11 +80,32 @@ class TSearchServer():
         if not params["pages_query"]:# no query to the pages index
             return EMPTY_RESPONSE
 
-        results, total_results_count = self.pages_search_engine.search(query=params["pages_query"],
+        objects_matching_custom_field = self.cfields_search_engine.find_mentions_of_author_and_title(params["pages_query"])
+        if filtered_object_ids != None:
+            objects_matching_custom_field = [obj_id for obj_id in objects_matching_custom_field \
+                                                if obj_id in filtered_object_ids]
+
+        first_object2return = params["start"]
+        objects2return = params["len"]
+
+        first_from_custom_matchings = min(len(objects_matching_custom_field), first_object2return)
+        take_custom_matchings_count = min(objects2return, max(0, len(objects_matching_custom_field) - first_object2return))
+
+        objects2return = max(0, objects2return - take_custom_matchings_count)
+        first_object2return = max(0, first_object2return - len(objects_matching_custom_field))
+
+        total_results_count = take_custom_matchings_count
+        joined_results = []
+        for obj_id in objects_matching_custom_field[first_from_custom_matchings: first_from_custom_matchings + take_custom_matchings_count]:
+            search_result = TSearchEngineResult(obj_id, 0, 0)
+            joined_results += [search_result]
+        pages_results, pages_results_count = self.pages_search_engine.search(query=params["pages_query"],
                                                                       filter_objects=filtered_object_ids,
-                                                                      first_object2return=params["start"],
-                                                                      objects2return=params["len"])
-        return results, total_results_count
+                                                                      first_object2return=first_object2return,
+                                                                      objects2return=objects2return)
+        joined_results += pages_results
+        total_results_count += pages_results_count
+        return joined_results, total_results_count
         
 MACHINE_NETWORK_NAME = socket.gethostbyname(socket.gethostname())
 
