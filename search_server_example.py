@@ -217,6 +217,7 @@ class TGetHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             book_data = {
                          "title" : book_info.title.decode("windows-1251"), "author": book_info.author.decode("windows-1251"), 
                          "udc" : book_info.udc, "year": book_info.year, 
+                         "id": str(result.object_id).zfill(6), #hack to return string object doesn't have snippets
                          "pages count" : book_info.pages_count, "lib_sections" : book_info.lib_sections }
             
             top_segments = []
