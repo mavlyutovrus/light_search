@@ -82,7 +82,10 @@ class TSearchServer():
 
         objects_matching_custom_field = self.cfields_search_engine.find_mentions_of_author_and_title(params["pages_query"])
         if filtered_object_ids != None:
-            objects_matching_custom_field = [obj_id for obj_id in objects_matching_custom_field \
+            if len(filtered_object_ids) == 1:#searching inside one book:
+                objects_matching_custom_field = []
+            else:
+                objects_matching_custom_field = [obj_id for obj_id in objects_matching_custom_field \
                                                 if obj_id in filtered_object_ids]
 
         first_object2return = params["start"]
